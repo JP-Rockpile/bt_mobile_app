@@ -1,0 +1,26 @@
+{
+  "name": "betthink-monorepo",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:mobile": "yarn --cwd apps/mobile start",
+    "build:shared": "yarn --cwd packages/shared build",
+    "test": "yarn --cwd apps/mobile test",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "generate:api": "OPENAPI_SPEC_URL=\"$OPENAPI_SPEC_URL\" node scripts/generate-api.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "eslint": "^9.10.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-universe": "^12.0.0",
+    "openapi-typescript-codegen": "^0.29.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.4.5"
+  }
+}
