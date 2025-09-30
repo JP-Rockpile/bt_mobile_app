@@ -1,0 +1,482 @@
+openapi: 3.0.3
+info:
+  title: Bet Think API
+  description: Backend REST and SSE API for Bet Think sports betting assistant
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api@betthink.app
+
+servers:
+  - url: https://api.betthink.app
+    description: Production
+  - url: https://staging-api.betthink.app
+    description: Staging
+  - url: http://localhost:3000
+    description: Development
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        picture:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ChatThread:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastMessageAt:
+          type: string
+          format: date-time
+        messageCount:
+          type: integer
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        chatId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    BetRecommendation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sport:
+          type: string
+        league:
+          type: string
+        event:
+          type: string
+        eventDate:
+          type: string
+          format: date-time
+        betType:
+          type: string
+        selection:
+          type: string
+        odds:
+          type: number
+        oddsFormat:
+          type: string
+          enum: [decimal, american, fractional]
+        stake:
+          type: number
+        potentialPayout:
+          type: number
+        sportsbook:
+          $ref: '#/components/schemas/Sportsbook'
+        reasoning:
+          type: string
+        confidence:
+          type: number
+
+    Sportsbook:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        deepLinkScheme:
+          type: string
+        deepLinkPath:
+          type: string
+        appStoreUrl:
+          type: string
+          format: uri
+        playStoreUrl:
+          type: string
+          format: uri
+
+    BetConfirmation:
+      type: object
+      properties:
+        betRecommendationId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        chatId:
+          type: string
+          format: uuid
+        messageId:
+          type: string
+          format: uuid
+        confirmedAt:
+          type: string
+          format: date-time
+        redirectedToSportsbook:
+          type: boolean
+
+    DeviceToken:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        token:
+          type: string
+        platform:
+          type: string
+          enum: [ios, android]
+        deviceId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          $ref: '#/components/schemas/ApiError'
+        timestamp:
+          type: string
+          format: date-time
+
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        statusCode:
+          type: integer
+
+paths:
+  /api/users/me:
+    get:
+      summary: Get current user
+      tags: [Users]
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/chat/threads:
+    get:
+      summary: List chat threads
+      tags: [Chat]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: List of threads
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatThread'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+
+    post:
+      summary: Create chat thread
+      tags: [Chat]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        '201':
+          description: Created thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatThread'
+
+  /api/chat/threads/{threadId}:
+    get:
+      summary: Get chat thread
+      tags: [Chat]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Thread details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatThread'
+
+    delete:
+      summary: Delete chat thread
+      tags: [Chat]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Thread deleted
+
+  /api/chat/threads/{threadId}/messages:
+    get:
+      summary: Get chat messages
+      tags: [Chat]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+
+    post:
+      summary: Send chat message
+      tags: [Chat]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+              required:
+                - content
+      responses:
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+
+  /api/chat/threads/{threadId}/stream:
+    get:
+      summary: SSE stream for LLM response
+      tags: [Chat]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/bets/recommendations/{recommendationId}:
+    get:
+      summary: Get bet recommendation
+      tags: [Betting]
+      parameters:
+        - name: recommendationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Bet recommendation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetRecommendation'
+
+  /api/bets/confirmations:
+    post:
+      summary: Confirm bet
+      tags: [Betting]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetConfirmation'
+      responses:
+        '201':
+          description: Bet confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BetConfirmation'
+
+  /api/bets/history:
+    get:
+      summary: Get bet history
+      tags: [Betting]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Bet history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BetConfirmation'
+
+  /api/notifications/devices:
+    post:
+      summary: Register device for push notifications
+      tags: [Notifications]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceToken'
+      responses:
+        '201':
+          description: Device registered
+
+  /api/notifications/devices/{deviceId}:
+    delete:
+      summary: Unregister device
+      tags: [Notifications]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Device unregistered
+
+tags:
+  - name: Users
+    description: User management
+  - name: Chat
+    description: Chat operations
+  - name: Betting
+    description: Betting operations
+  - name: Notifications
+    description: Push notifications
