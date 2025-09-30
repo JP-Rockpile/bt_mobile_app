@@ -1,0 +1,8 @@
+{
+  "root": true,
+  "extends": ["universe/native"],
+  "ignorePatterns": ["node_modules/", "dist/", "packages/shared/src/api/**"],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
+  }
+}
