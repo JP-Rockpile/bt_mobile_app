@@ -1,0 +1,70 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development",
+        "API_URL": "http://localhost:3000",
+        "AUTH0_DOMAIN": "dev-betthink.auth0.com",
+        "AUTH0_CLIENT_ID": "dev_client_id",
+        "AUTH0_AUDIENCE": "http://localhost:3000"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "staging",
+        "API_URL": "https://staging-api.betthink.com",
+        "AUTH0_DOMAIN": "staging-betthink.auth0.com",
+        "AUTH0_CLIENT_ID": "staging_client_id",
+        "AUTH0_AUDIENCE": "https://staging-api.betthink.com"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "APP_VARIANT": "production",
+        "API_URL": "https://api.betthink.com",
+        "AUTH0_DOMAIN": "betthink.auth0.com",
+        "AUTH0_CLIENT_ID": "prod_client_id",
+        "AUTH0_AUDIENCE": "https://api.betthink.com"
+      },
+      "ios": {
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "remote"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "your-apple-id@example.com",
+        "ascAppId": "your-app-store-connect-app-id"
+      },
+      "android": {
+        "serviceAccountKeyPath": "../path/to/service-account-key.json",
+        "track": "production"
+      }
+    }
+  }
+}
