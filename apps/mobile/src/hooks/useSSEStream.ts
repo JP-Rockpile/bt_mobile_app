@@ -5,7 +5,7 @@ import { useChatStore } from '@/stores/chat.store';
 import { analyticsService } from '@/services/analytics.service';
 import { errorTrackingService } from '@/services/error-tracking.service';
 import { logger } from '@/utils/logger';
-import type { StreamChunk } from '@shared/types';
+import type { StreamChunk } from '@betthink/shared';
 
 interface UseSSEStreamOptions {
   threadId: string;

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatThread, ChatMessage, StreamChunk } from '@shared/types';
+import type { Conversation as ChatThread, ChatMessage, StreamChunk } from '@betthink/shared';
 
 interface ActiveStream {
   threadId: string;

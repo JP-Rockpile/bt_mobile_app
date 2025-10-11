@@ -5,8 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useChatThreads, useCreateThread } from '@/hooks/useChat';
 import { useAuthStore } from '@/stores/auth.store';
-import { formatRelativeTime } from '@shared/utils';
-import type { ChatThread } from '@shared/types';
+import { formatRelativeTime, type Conversation as ChatThread } from '@betthink/shared';
 import type { MainTabScreenProps } from '@/navigation/types';
 import { spacing } from '@/theme';
 

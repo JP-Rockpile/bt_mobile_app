@@ -1,6 +1,6 @@
 import { logger } from '@/utils/logger';
 import { authService } from './auth.service';
-import type { StreamChunk, SSEEvent } from '@shared/types';
+import type { StreamChunk, SSEEvent } from '@betthink/shared';
 
 export interface SSEOptions {
   url: string;

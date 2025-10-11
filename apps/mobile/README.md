@@ -15,12 +15,13 @@ Bet Think Mobile App
 └── OTA Updates (EAS)
 ```
 
-### Microservices Integration
+### Architecture Integration
 
-- **services/api**: Backend REST and SSE endpoints
-- **services/model**: LLM inference service
+- **Backend API** (separate repository): REST and SSE endpoints, LLM integration
 - **packages/shared**: Shared types and utilities
 - **apps/mobile**: This mobile client
+
+See the [API Integration Guide](../../docs/API_INTEGRATION.md) for connecting to the backend API.
 
 ## 🚀 Quick Start
 
@@ -48,15 +49,13 @@ npm install
 cp .env.example .env
 ```
 
-2. Configure environment variables:
+2. Configure environment variables (see `.env.example` for all options):
 ```env
 APP_ENV=development
-EXPO_PUBLIC_API_URL=http://localhost:3000
+EXPO_PUBLIC_API_URL=http://localhost:3000  # Your backend API URL
 EXPO_PUBLIC_AUTH0_DOMAIN=your-tenant.auth0.com
 EXPO_PUBLIC_AUTH0_CLIENT_ID=your-client-id
 EXPO_PUBLIC_AUTH0_AUDIENCE=https://api.betthink.app
-EXPO_PUBLIC_AMPLITUDE_API_KEY=your-amplitude-key
-EXPO_PUBLIC_SENTRY_DSN=https://your-sentry-dsn
 ```
 
 3. For Auth0 setup:
@@ -64,6 +63,12 @@ EXPO_PUBLIC_SENTRY_DSN=https://your-sentry-dsn
    - Add callback URLs: `betthink://callback`, `https://betthink.app/callback`
    - Enable PKCE flow
    - Configure allowed logout URLs
+   - **Important**: Configure the same Auth0 settings in your backend API
+
+4. **Backend API Setup**:
+   - Ensure your backend API (separate repository) is running
+   - Verify API URL is correctly configured in `.env`
+   - See the [API Integration Guide](../../docs/API_INTEGRATION.md) for detailed instructions
 
 ### Running the App
 

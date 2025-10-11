@@ -1,20 +1,22 @@
-# Bet Think - Sports Betting Chat Assistant
+# Bet Think - Mobile App Repository
 
-A production-ready microservices application comprising a React Native mobile client, backend REST/SSE API, LLM inference service, and shared utilities.
+A production-ready React Native mobile application for Bet Think, a sports betting chat assistant. This repository contains the mobile client and shared utilities. The backend API is maintained in a separate repository.
 
 ## 🏗️ Project Structure
 
 ```
-bet-think/
+bt_mobile_app/
 ├── apps/
 │   └── mobile/              # React Native mobile app (Expo + TypeScript)
-├── services/
-│   ├── api/                 # Backend REST and SSE endpoints (placeholder)
-│   └── model/               # LLM inference service (placeholder)
 ├── packages/
 │   └── shared/              # Shared types, schemas, and utilities
+├── docs/
+│   ├── api/                 # API documentation and OpenAPI spec
+│   └── API_INTEGRATION.md   # Guide for connecting to backend API
 └── README.md                # This file
 ```
+
+**Note**: The backend API is maintained in a separate repository. See [API Integration Guide](./docs/API_INTEGRATION.md) for setup instructions.
 
 ## 📱 Mobile App
 
@@ -89,11 +91,11 @@ npm start
 # Run on iOS
 npm run ios
 
-# Run on Android
+# Run on Android     
 npm run android
 ```
 
-**Note**: The mobile app works offline with local storage. Backend API implementation is pending.
+**Note**: The mobile app works offline with local storage. Ensure your backend API (separate repository) is running for full functionality. See [API Integration Guide](./docs/API_INTEGRATION.md) for setup.
 
 ### Quick Start - Shared Package
 
@@ -103,26 +105,19 @@ npm install
 npm run type-check
 ```
 
-## 🏗️ Microservices Architecture
+## 🏗️ Architecture
 
-### services/api (Backend)
+This repository contains the **mobile client application**. The backend API and LLM services are maintained in a separate repository.
 
-**Status**: Placeholder for implementation
+### Backend API (Separate Repository)
 
 **Responsibilities**:
 - REST API endpoints for chat, betting, user management
 - SSE streaming endpoints for LLM responses
 - Authentication middleware (Auth0 token validation)
-- Database integration (PostgreSQL recommended)
+- Database integration
 - Push notification dispatch
 - Rate limiting and security
-
-**Tech Stack** (suggested):
-- Node.js + Express/Fastify
-- TypeScript
-- PostgreSQL + Prisma/TypeORM
-- Redis for caching
-- Auth0 SDK
 
 **Key Endpoints**:
 ```
@@ -140,30 +135,9 @@ POST   /api/notifications/devices
 GET    /api/notifications
 ```
 
-### services/model (LLM Inference)
+**Full API specification**: See `docs/api/openapi.yaml`
 
-**Status**: Placeholder for implementation
-
-**Responsibilities**:
-- LLM inference (OpenAI, Anthropic, or self-hosted)
-- Prompt engineering for betting recommendations
-- Streaming response generation
-- Token usage tracking
-- Model version management
-
-**Tech Stack** (suggested):
-- Python + FastAPI
-- OpenAI/Anthropic SDK or vLLM
-- Redis for caching
-- Prometheus for metrics
-
-**Key Endpoints**:
-```
-POST   /infer                    # Generate response
-POST   /infer/stream             # Streaming response
-GET    /health
-GET    /metrics
-```
+**Integration Guide**: See [API Integration Guide](./docs/API_INTEGRATION.md) for detailed setup instructions.
 
 ## 🔐 Authentication Flow
 
@@ -225,18 +199,14 @@ User places bet manually
 
 ## 📊 API Schema
 
-A complete OpenAPI 3.0 specification should be created at:
+The complete OpenAPI 3.0 specification is available at:
 ```
-services/api/openapi.yaml
-```
-
-The mobile app can then generate a typed client:
-```bash
-cd apps/mobile
-npm run generate:api
+docs/api/openapi.yaml
 ```
 
-This creates type-safe API functions in `src/api/generated/`.
+This specification defines all endpoints, request/response schemas, and authentication requirements that the backend API should implement.
+
+The mobile app includes a pre-built typed API client in `apps/mobile/src/api/` that follows this specification.
 
 ## 🧪 Testing
 
@@ -253,20 +223,9 @@ npm run test:e2e:build:ios
 npm run test:e2e
 ```
 
-### API (when implemented)
+### API (Separate Repository)
 
-```bash
-cd services/api
-
-# Unit tests
-npm test
-
-# Integration tests
-npm run test:integration
-
-# Load tests
-npm run test:load
-```
+See your backend API repository for testing instructions.
 
 ## 🚀 Deployment
 
@@ -282,13 +241,9 @@ eas build --profile production --platform all
 eas update --branch production --message "Bug fixes"
 ```
 
-### Backend Services (when implemented)
+### Backend API (Separate Repository)
 
-Suggested deployment platforms:
-- **API**: AWS ECS, Google Cloud Run, Railway
-- **Model**: AWS SageMaker, Modal, Replicate
-- **Database**: AWS RDS, Supabase, PlanetScale
-- **Redis**: AWS ElastiCache, Redis Cloud
+See your backend API repository for deployment instructions.
 
 ## 📈 Monitoring
 
@@ -303,10 +258,10 @@ Suggested deployment platforms:
 - [x] Automatic token refresh
 - [x] HTTPS only
 - [x] Sensitive data redaction in logs
-- [ ] API rate limiting (implement in services/api)
-- [ ] Input validation (implement in services/api)
-- [ ] SQL injection prevention (implement in services/api)
-- [ ] CORS configuration (implement in services/api)
+- [ ] API rate limiting (implement in backend API repo)
+- [ ] Input validation (implement in backend API repo)
+- [ ] SQL injection prevention (implement in backend API repo)
+- [ ] CORS configuration (implement in backend API repo)
 
 ## 🎯 What's Included
 
@@ -322,26 +277,25 @@ Suggested deployment platforms:
 **Shared Package (`packages/shared/`):**
 - TypeScript types and Zod schemas
 - Utility functions
-- Shared across all services
+- Can be shared with backend API if needed
 
 **Documentation:**
 - Architecture diagrams
 - API specifications (OpenAPI 3.0)
+- API integration guide
 - Contributing guidelines
 - Deployment guides
 
-### ⏳ Placeholders (To Be Implemented)
+### 📝 Backend API (Separate Repository)
 
-**Backend API (`services/api/`):**
-- OpenAPI specification complete
-- Implementation pending
-- Database schema needed
-- Auth0 integration required
+The backend API should be implemented in a separate repository following the OpenAPI specification in `docs/api/openapi.yaml`.
 
-**LLM Service (`services/model/`):**
-- Architecture defined
-- Implementation pending
-- Model selection needed
+**Requirements**:
+- Implement endpoints per OpenAPI spec
+- Auth0 token validation
+- PostgreSQL or similar database
+- SSE streaming for LLM responses
+- Push notification dispatch
 
 ## 📝 Environment Variables
 
@@ -349,27 +303,9 @@ Suggested deployment platforms:
 
 See `apps/mobile/.env.example`
 
-### API Service (example)
+### Backend API Service (Separate Repository)
 
-```env
-NODE_ENV=production
-PORT=3000
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
-AUTH0_DOMAIN=your-tenant.auth0.com
-AUTH0_AUDIENCE=https://api.betthink.app
-MODEL_SERVICE_URL=http://model:8000
-SENTRY_DSN=https://...
-```
-
-### Model Service (example)
-
-```env
-OPENAI_API_KEY=sk-...
-MODEL_NAME=gpt-4-turbo
-MAX_TOKENS=2000
-TEMPERATURE=0.7
-```
+See your backend API repository for environment variable configuration.
 
 ## 🤝 Contributing
 
@@ -378,10 +314,12 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
 ## 📚 Documentation
 
 - 📖 [Quick Start Guide (5 min)](./QUICKSTART.md)
+- 🔌 [API Integration Guide](./docs/API_INTEGRATION.md) ⭐ **Start here for API setup**
 - 📁 [Complete File Index](./FILE_INDEX.md)
 - 📊 [Project Summary](./PROJECT_SUMMARY.md)
 - 📱 [Mobile App Docs](./apps/mobile/README.md)
 - 🏗️ [Architecture Guide](./apps/mobile/ARCHITECTURE.md)
+- 📋 [OpenAPI Specification](./docs/api/openapi.yaml)
 
 ## 📄 License
 

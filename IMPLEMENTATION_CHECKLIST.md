@@ -286,7 +286,7 @@
   - [ ] CORS configuration
 
 - [ ] services/model implementation
-  - [ ] LLM integration (OpenAI/Anthropic)
+  - [ ] LLM integration
   - [ ] Prompt engineering
   - [ ] Streaming responses
   - [ ] Token tracking

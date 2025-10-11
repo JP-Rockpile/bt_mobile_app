@@ -1,6 +1,5 @@
 import { ExpoConfig, ConfigContext } from 'expo/config';
 
-const IS_DEV = process.env.APP_ENV === 'development';
 const IS_STAGING = process.env.APP_ENV === 'staging';
 const IS_PROD = process.env.APP_ENV === 'production';
 
@@ -14,7 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   scheme: 'betthink',
   splash: {
-    image: './assets/splash.png',
+    image: './assets/splash-icon.png',
     resizeMode: 'contain',
     backgroundColor: '#1E1E1E',
   },
@@ -29,6 +28,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     buildNumber: '1',
     infoPlist: {
       UIBackgroundModes: ['remote-notification'],
+      // Allow HTTP traffic in development
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: !IS_PROD,
+        NSAllowsLocalNetworking: true,
+      },
     },
     associatedDomains: [
       `applinks:${process.env.EXPO_PUBLIC_DOMAIN || 'betthink.app'}`,
@@ -72,9 +76,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-notifications',
       {
-        icon: './assets/notification-icon.png',
         color: '#2196F3',
-        sounds: ['./assets/notification-sound.wav'],
       },
     ],
     [
@@ -95,6 +97,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     'expo-secure-store',
     'expo-sqlite',
+    'expo-web-browser',
   ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',
@@ -113,7 +116,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     fallbackToCacheTimeout: 0,
     enabled: true,
   },
-  runtimeVersion: {
-    policy: 'sdkVersion',
-  },
+  runtimeVersion: '1.0.0',
 });

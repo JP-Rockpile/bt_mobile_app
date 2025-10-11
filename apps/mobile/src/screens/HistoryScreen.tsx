@@ -3,8 +3,7 @@ import { View, StyleSheet, FlatList } from 'react-native';
 import { List, Text, ActivityIndicator, useTheme, Chip } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBetHistory } from '@/hooks/useBetting';
-import { formatRelativeTime } from '@shared/utils';
-import type { BetConfirmation } from '@shared/types';
+import { formatRelativeTime, type BetConfirmation } from '@betthink/shared';
 import { spacing } from '@/theme';
 
 export const HistoryScreen: React.FC = () => {

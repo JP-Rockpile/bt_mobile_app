@@ -1,13 +1,13 @@
 import { apiClient } from './client';
 import type {
-  ChatThread,
+  Conversation as ChatThread,
   ChatMessage,
-  ChatHistoryResponse,
+  ConversationListResponse as ChatHistoryResponse,
   BetRecommendation,
   BetConfirmation,
   DeviceToken,
   PaginationParams,
-} from '@shared/types';
+} from '@betthink/shared';
 
 // Chat Endpoints
 export const chatApi = {

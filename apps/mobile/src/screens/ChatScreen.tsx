@@ -15,7 +15,7 @@ import { useSSEStream } from '@/hooks/useSSEStream';
 import { useUIStore } from '@/stores/ui.store';
 import { useChatStore } from '@/stores/chat.store';
 import { databaseService } from '@/services/database.service';
-import type { ChatMessage as ChatMessageType } from '@shared/types';
+import type { ChatMessage as ChatMessageType } from '@betthink/shared';
 import { spacing } from '@/theme';
 
 interface ChatScreenProps {

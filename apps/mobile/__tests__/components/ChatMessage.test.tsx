@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { ChatMessage } from '@/components/ChatMessage';
-import type { ChatMessage as ChatMessageType } from '@shared/types';
+import type { ChatMessage as ChatMessageType } from '@betthink/shared';
 
 const mockMessage: ChatMessageType = {
   id: '1',

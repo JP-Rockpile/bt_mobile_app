@@ -1,7 +1,7 @@
 import { init, track, Identify, identify, setUserId } from '@amplitude/analytics-react-native';
 import { config, isProduction } from '@/config';
 import { logger } from '@/utils/logger';
-import type { EventName } from '@shared/types';
+import type { EventName } from '@betthink/shared';
 
 class AnalyticsService {
   private initialized = false;

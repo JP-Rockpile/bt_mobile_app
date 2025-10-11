@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { config } from '@/config';
 import { authService } from '@/services/auth.service';
 import { logger } from '@/utils/logger';
-import type { ApiResponse, ApiError } from '@shared/types';
+import type { ApiResponse, ApiError } from '@betthink/shared';
 
 class ApiClient {
   private client: AxiosInstance;

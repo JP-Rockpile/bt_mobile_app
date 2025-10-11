@@ -5,8 +5,7 @@ import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/botto
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { useUIStore } from '@/stores/ui.store';
 import { useConfirmBet, useCancelBet } from '@/hooks/useBetting';
-import { convertOdds } from '@shared/utils';
-import type { BetRecommendation } from '@shared/types';
+import { convertOdds, type BetRecommendation } from '@betthink/shared';
 import { spacing, borderRadius } from '@/theme';
 
 export const BetConfirmationSheet: React.FC = () => {

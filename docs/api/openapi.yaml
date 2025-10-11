@@ -1,7 +1,10 @@
 openapi: 3.0.3
 info:
   title: Bet Think API
-  description: Backend REST and SSE API for Bet Think sports betting assistant
+  description: |
+    Backend REST and SSE API for Bet Think sports betting assistant.
+    Note: This file uses the OpenAPI specification format (formerly Swagger) to document our own custom API.
+    It is not related to OpenAI (the AI company).
   version: 1.0.0
   contact:
     name: API Support
@@ -219,9 +222,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
 
-  /api/chat/threads:
+  /api/v1/chat/conversations:
     get:
-      summary: List chat threads
+      summary: List chat conversations
       tags: [Chat]
       parameters:
         - name: page
@@ -236,13 +239,13 @@ paths:
             default: 50
       responses:
         '200':
-          description: List of threads
+          description: List of conversations
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  threads:
+                  conversations:
                     type: array
                     items:
                       $ref: '#/components/schemas/ChatThread'
@@ -254,7 +257,7 @@ paths:
                     type: integer
 
     post:
-      summary: Create chat thread
+      summary: Create chat conversation
       tags: [Chat]
       requestBody:
         content:
@@ -264,20 +267,22 @@ paths:
               properties:
                 title:
                   type: string
+                initialMessage:
+                  type: string
       responses:
         '201':
-          description: Created thread
+          description: Created conversation
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatThread'
 
-  /api/chat/threads/{threadId}:
+  /api/v1/chat/conversations/{conversationId}:
     get:
-      summary: Get chat thread
+      summary: Get chat conversation
       tags: [Chat]
       parameters:
-        - name: threadId
+        - name: conversationId
           in: path
           required: true
           schema:
@@ -285,17 +290,17 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Thread details
+          description: Conversation details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatThread'
 
     delete:
-      summary: Delete chat thread
+      summary: Delete chat conversation
       tags: [Chat]
       parameters:
-        - name: threadId
+        - name: conversationId
           in: path
           required: true
           schema:
@@ -303,14 +308,43 @@ paths:
             format: uuid
       responses:
         '204':
-          description: Thread deleted
+          description: Conversation deleted
 
-  /api/chat/threads/{threadId}/messages:
-    get:
-      summary: Get chat messages
+  /api/v1/chat/conversations/{conversationId}/messages:
+    post:
+      summary: Send chat message
       tags: [Chat]
       parameters:
-        - name: threadId
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+              required:
+                - content
+      responses:
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+
+  /api/v1/chat/conversations/{conversationId}/history:
+    get:
+      summary: Get chat message history
+      tags: [Chat]
+      parameters:
+        - name: conversationId
           in: path
           required: true
           schema:
@@ -336,40 +370,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/ChatMessage'
 
-    post:
-      summary: Send chat message
-      tags: [Chat]
-      parameters:
-        - name: threadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                content:
-                  type: string
-              required:
-                - content
-      responses:
-        '201':
-          description: Message created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatMessage'
-
-  /api/chat/threads/{threadId}/stream:
+  /api/v1/chat/conversations/{conversationId}/stream:
     get:
       summary: SSE stream for LLM response
       tags: [Chat]
       parameters:
-        - name: threadId
+        - name: conversationId
           in: path
           required: true
           schema:

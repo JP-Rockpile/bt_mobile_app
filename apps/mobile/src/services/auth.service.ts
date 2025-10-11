@@ -2,7 +2,7 @@ import Auth0, { Credentials } from 'react-native-auth0';
 import * as SecureStore from 'expo-secure-store';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
-import type { AuthTokens, User } from '@shared/types';
+import type { AuthTokens, User } from '@betthink/shared';
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: 'auth:accessToken',

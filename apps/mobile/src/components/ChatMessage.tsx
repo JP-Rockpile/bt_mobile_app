@@ -1,8 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text, Card, useTheme } from 'react-native-paper';
-import { formatRelativeTime } from '@shared/utils';
-import type { ChatMessage as ChatMessageType } from '@shared/types';
+import { formatRelativeTime, type ChatMessage as ChatMessageType } from '@betthink/shared';
 import { spacing, borderRadius } from '@/theme';
 
 interface ChatMessageProps {

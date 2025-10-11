@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { logger } from '@/utils/logger';
-import type { LocalChatMessage, ChatThread } from '@shared/types';
+import type { LocalChatMessage, Conversation as ChatThread } from '@betthink/shared';
 
 const DB_NAME = 'betthink.db';
 const DB_VERSION = 1;

@@ -4,7 +4,7 @@ import { chatApi } from '@/api/endpoints';
 import { databaseService } from '@/services/database.service';
 import { logger } from '@/utils/logger';
 import { analyticsService } from '@/services/analytics.service';
-import type { ChatThread, ChatMessage, LocalChatMessage } from '@shared/types';
+import type { Conversation as ChatThread, ChatMessage, LocalChatMessage } from '@betthink/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useChatThreads = (userId: string) => {

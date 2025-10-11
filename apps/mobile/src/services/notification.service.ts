@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { logger } from '@/utils/logger';
 import { notificationApi } from '@/api/endpoints';
-import type { DeviceToken } from '@shared/types';
+import type { DeviceToken } from '@betthink/shared';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
