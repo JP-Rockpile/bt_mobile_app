@@ -3,35 +3,37 @@ import type {
   Conversation as ChatThread,
   ChatMessage,
   ConversationListResponse as ChatHistoryResponse,
-  BetRecommendation,
   BetConfirmation,
   DeviceToken,
   PaginationParams,
 } from '@betthink/shared';
+import type { BetRecommendation } from '@/types/bet';
 
 // Chat Endpoints
+// Note: Backend uses "conversations" terminology in API paths
+// but we maintain "threads" in our frontend for consistency
 export const chatApi = {
   getThreads: (params?: PaginationParams) =>
-    apiClient.get<ChatHistoryResponse>('/api/chat/threads', params),
+    apiClient.get<ChatHistoryResponse>('/api/v1/chat/conversations', params),
 
   getThread: (threadId: string) =>
-    apiClient.get<ChatThread>(`/api/chat/threads/${threadId}`),
+    apiClient.get<ChatThread>(`/api/v1/chat/conversations/${threadId}`),
 
-  createThread: (title?: string) =>
-    apiClient.post<ChatThread>('/api/chat/threads', { title }),
+  createThread: (title?: string, initialMessage?: string) =>
+    apiClient.post<ChatThread>('/api/v1/chat/conversations', { title, initialMessage }),
 
   deleteThread: (threadId: string) =>
-    apiClient.delete<void>(`/api/chat/threads/${threadId}`),
+    apiClient.delete<void>(`/api/v1/chat/conversations/${threadId}`),
 
   getMessages: (threadId: string, params?: PaginationParams) =>
-    apiClient.get<ChatMessage[]>(`/api/chat/threads/${threadId}/messages`, params),
+    apiClient.get<ChatMessage[]>(`/api/v1/chat/conversations/${threadId}/history`, params),
 
   sendMessage: (threadId: string, content: string) =>
-    apiClient.post<ChatMessage>(`/api/chat/threads/${threadId}/messages`, { content }),
+    apiClient.post<ChatMessage>(`/api/v1/chat/conversations/${threadId}/messages`, { content }),
 
   // Returns SSE stream URL
   getStreamUrl: (threadId: string) =>
-    apiClient.getStreamUrl(`/api/chat/threads/${threadId}/stream`),
+    apiClient.getStreamUrl(`/api/v1/chat/conversations/${threadId}/stream`),
 };
 
 // Betting Endpoints

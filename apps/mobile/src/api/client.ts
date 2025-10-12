@@ -93,7 +93,7 @@ class ApiClient {
     );
   }
 
-  private normalizeError(error: AxiosError): ApiError {
+  private normalizeError(error: AxiosError): ApiError & { statusCode?: number } {
     if (error.response) {
       const data = error.response.data as any;
       return {
@@ -123,7 +123,20 @@ class ApiClient {
     try {
       logger.debug(`API GET: ${url}`, params);
       const response = await this.client.get<ApiResponse<T>>(url, { params });
-      return response.data.data as T;
+      
+      // Handle wrapped response format: {success, data, timestamp}
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return response.data.data as T;
+      }
+      
+      // Fallback: Backend might be returning unwrapped data
+      if (response.data) {
+        logger.warn(`API returned unwrapped response from ${url}. Expected {success, data, timestamp} format.`);
+        return response.data as T;
+      }
+      
+      logger.error(`Invalid API response format from ${url}`, response.data);
+      throw new Error(`Invalid API response: no data received`);
     } catch (error) {
       logger.apiError(url, error);
       throw error;
@@ -132,9 +145,30 @@ class ApiClient {
 
   async post<T>(url: string, data?: unknown): Promise<T> {
     try {
-      logger.debug(`API POST: ${url}`);
+      logger.debug(`API POST: ${url}`, data);
       const response = await this.client.post<ApiResponse<T>>(url, data);
-      return response.data.data as T;
+      
+      // Log the raw response for debugging
+      logger.debug(`API Response: ${url}`, {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+      });
+      
+      // Handle wrapped response format: {success, data, timestamp}
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return response.data.data as T;
+      }
+      
+      // Fallback: Backend might be returning unwrapped data
+      // This is a temporary measure during development
+      if (response.data) {
+        logger.warn(`API returned unwrapped response from ${url}. Expected {success, data, timestamp} format.`);
+        return response.data as T;
+      }
+      
+      logger.error(`Invalid API response format from ${url}`, response.data);
+      throw new Error(`Invalid API response: no data received`);
     } catch (error) {
       logger.apiError(url, error);
       throw error;

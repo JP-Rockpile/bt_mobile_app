@@ -60,9 +60,17 @@ class NotificationService {
 
   private async registerForPushNotifications(): Promise<void> {
     try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      
+      // Skip push notification registration if no project ID is configured
+      if (!projectId) {
+        logger.warn('EAS Project ID not configured. Push notifications are disabled. To enable, set EAS_PROJECT_ID in your environment or run "eas init".');
+        return;
+      }
+
       // Get Expo push token
       const token = await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId,
+        projectId,
       });
 
       this.expoPushToken = token.data;

@@ -4,7 +4,7 @@ import { chatApi } from '@/api/endpoints';
 import { databaseService } from '@/services/database.service';
 import { logger } from '@/utils/logger';
 import { analyticsService } from '@/services/analytics.service';
-import type { Conversation as ChatThread, ChatMessage, LocalChatMessage } from '@betthink/shared';
+import type { Conversation, ChatMessage, LocalChatMessage } from '@betthink/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useChatThreads = (userId: string) => {
@@ -16,14 +16,14 @@ export const useChatThreads = (userId: string) => {
 
       // Fetch from API in background
       try {
-        const response = await chatApi.getThreads({ page: 1, pageSize: 50 });
+        const response = await chatApi.getThreads({ page: 1, limit: 50 });
         
         // Sync to local database
         await Promise.all(
-          response.threads.map((thread) => databaseService.saveThread(thread))
+          response.conversations.map((thread) => databaseService.saveThread(thread as any))
         );
 
-        return response.threads;
+        return response.conversations as any;
       } catch (error) {
         logger.error('Failed to fetch threads from API, using local cache', error);
         return localThreads;
@@ -59,7 +59,7 @@ export const useChatMessages = (threadId: string) => {
 
       // Fetch from API
       try {
-        const apiMessages = await chatApi.getMessages(threadId, { page: 1, pageSize: 100 });
+        const apiMessages = await chatApi.getMessages(threadId, { page: 1, limit: 100 });
 
         // Sync to local database
         await Promise.all(
@@ -87,8 +87,19 @@ export const useCreateThread = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (title?: string) => {
-      const thread = await chatApi.createThread(title);
+    mutationFn: async (params?: { title?: string; initialMessage?: string } | string) => {
+      // Handle both old format (string) and new format (object) for backwards compatibility
+      let title: string | undefined;
+      let initialMessage: string | undefined;
+      
+      if (typeof params === 'string') {
+        title = params;
+      } else if (params) {
+        title = params.title;
+        initialMessage = params.initialMessage;
+      }
+      
+      const thread = await chatApi.createThread(title, initialMessage);
       await databaseService.saveThread(thread);
       return thread;
     },

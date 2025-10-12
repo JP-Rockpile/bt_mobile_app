@@ -1,10 +1,12 @@
 import * as Sentry from '@sentry/react-native';
+import { reactNavigationIntegration } from '@sentry/react-native';
 import { config, isProduction, isDevelopment } from '@/config';
 import { logger } from '@/utils/logger';
 import Constants from 'expo-constants';
 
 class ErrorTrackingService {
   private initialized = false;
+  private navigationIntegration = reactNavigationIntegration();
 
   initialize(): void {
     if (!config.enableErrorReporting || !config.sentryDsn) {
@@ -22,10 +24,7 @@ class ErrorTrackingService {
         enableAutoSessionTracking: true,
         sessionTrackingIntervalMillis: 30000,
         integrations: [
-          new Sentry.ReactNativeTracing({
-            routingInstrumentation: new Sentry.ReactNavigationInstrumentation(),
-            tracePropagationTargets: [config.apiUrl],
-          }),
+          this.navigationIntegration,
         ],
         beforeSend: (event, hint) => {
           // Filter out non-critical errors in development
@@ -55,6 +54,10 @@ class ErrorTrackingService {
     } catch (error) {
       logger.error('Failed to initialize error tracking', error);
     }
+  }
+
+  getNavigationIntegration() {
+    return this.navigationIntegration;
   }
 
   captureException(error: Error, context?: Record<string, any>): void {
@@ -183,13 +186,6 @@ class ErrorTrackingService {
       chatId,
     });
   }
-
-  getRoutingInstrumentation(): Sentry.ReactNavigationInstrumentation {
-    return new Sentry.ReactNavigationInstrumentation();
-  }
 }
 
 export const errorTrackingService = new ErrorTrackingService();
-
-// Export Sentry for use with React Navigation
-export const sentryRoutingInstrumentation = errorTrackingService.getRoutingInstrumentation();

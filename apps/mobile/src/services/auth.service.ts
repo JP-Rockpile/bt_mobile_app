@@ -5,11 +5,11 @@ import { logger } from '@/utils/logger';
 import type { AuthTokens, User } from '@betthink/shared';
 
 const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'auth:accessToken',
-  REFRESH_TOKEN: 'auth:refreshToken',
-  EXPIRES_AT: 'auth:expiresAt',
-  ID_TOKEN: 'auth:idToken',
-  USER: 'auth:user',
+  ACCESS_TOKEN: 'auth_accessToken',
+  REFRESH_TOKEN: 'auth_refreshToken',
+  EXPIRES_AT: 'auth_expiresAt',
+  ID_TOKEN: 'auth_idToken',
+  USER: 'auth_user',
 } as const;
 
 class AuthService {

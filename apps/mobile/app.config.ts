@@ -95,9 +95,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         },
       },
     ],
-    'expo-secure-store',
-    'expo-sqlite',
-    'expo-web-browser',
+    'expo-secure-store', // In SDK 54, this IS a config plugin
+    // Note: These are NOT config plugins, they're just libraries imported in code:
+    // - expo-sqlite  
+    // - expo-web-browser
   ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',

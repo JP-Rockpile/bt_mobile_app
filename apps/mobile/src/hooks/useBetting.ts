@@ -4,7 +4,8 @@ import { queryKeys } from '@/config/react-query';
 import { bettingApi } from '@/api/endpoints';
 import { analyticsService } from '@/services/analytics.service';
 import { logger } from '@/utils/logger';
-import { buildDeepLink, type BetRecommendation, type BetConfirmation, type Sportsbook } from '@betthink/shared';
+import { buildDeepLink, type BetConfirmation, type Sportsbook } from '@betthink/shared';
+import type { BetRecommendation } from '@/types/bet';
 
 export const useBetRecommendation = (recommendationId: string) => {
   return useQuery({

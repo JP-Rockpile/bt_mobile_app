@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useCreateConversation, useSendMessage, useChatMessages } from '../src/hooks/useChat';
+import { useCreateThread, useSendMessage, useChatMessages } from '../src/hooks/useChat';
 import { useSSEStream } from '../src/hooks/useSSEStream';
 import { databaseService } from '../src/services/database.service';
 import { useAuthStore } from '../src/stores/auth.store';
@@ -48,7 +48,7 @@ export default function Page() {
   const { user, isAuthenticated } = useAuthStore();
 
   // Hooks for conversation and message management
-  const createConversation = useCreateConversation();
+  const createThread = useCreateThread();
   const { data: messages = [], refetch: refetchMessages } = useChatMessages(currentConversationId || '');
   const sendMessage = useSendMessage(currentConversationId || '');
 
@@ -59,7 +59,7 @@ export default function Page() {
     error: streamError,
     startStreaming,
   } = useSSEStream({
-    conversationId: currentConversationId || '',
+    threadId: currentConversationId || '',
     onComplete: async (fullMessage) => {
       // Save completed assistant message to database
       if (currentConversationId) {
@@ -92,16 +92,16 @@ export default function Page() {
     setInputText('');
 
     try {
-      // Create conversation if this is the first message
+      // Create thread if this is the first message
       if (!currentConversationId) {
-        const conversation = await createConversation.mutateAsync({
+        const thread = await createThread.mutateAsync({
           title: 'Betting Chat',
           initialMessage: userMessage,
         });
-        setCurrentConversationId(conversation.id);
         
-        // Start streaming response (message was sent via initialMessage)
-        startStreaming();
+        // Set conversation ID and flag that we need to start streaming
+        setCurrentConversationId(thread.id);
+        setNeedsStreaming(true); // useEffect will start streaming once state updates
       } else {
         // Send message to existing conversation
         await sendMessage.mutateAsync(userMessage);
@@ -126,6 +126,17 @@ export default function Page() {
       console.error('Login failed:', error);
     }
   };
+
+  // Track if we just created a new conversation that needs streaming
+  const [needsStreaming, setNeedsStreaming] = useState(false);
+
+  // Start streaming after conversation is created and state has updated
+  useEffect(() => {
+    if (needsStreaming && currentConversationId && !isStreaming) {
+      setNeedsStreaming(false);
+      startStreaming();
+    }
+  }, [needsStreaming, currentConversationId, isStreaming, startStreaming]);
 
   // Combine messages with streaming content
   const displayMessages = useMemo(() => {
