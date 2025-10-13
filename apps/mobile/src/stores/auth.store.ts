@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { authService } from '@/services/auth.service';
 import { logger } from '@/utils/logger';
-import type { User, AuthTokens } from '@betthink/shared';
+import type { User, AuthTokens } from '@/services/auth.service';
 
 interface AuthState {
   user: User | null;

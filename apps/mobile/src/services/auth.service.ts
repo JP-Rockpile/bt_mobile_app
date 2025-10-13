@@ -1,8 +1,11 @@
-import Auth0, { Credentials } from 'react-native-auth0';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
-import type { AuthTokens, User } from '@betthink/shared';
+
+// Required for web browser to close properly after auth
+WebBrowser.maybeCompleteAuthSession();
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: 'auth_accessToken',
@@ -12,14 +15,66 @@ const STORAGE_KEYS = {
   USER: 'auth_user',
 } as const;
 
-class AuthService {
-  private auth0: Auth0;
-  private tokenRefreshTimeout?: NodeJS.Timeout;
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  idToken?: string;
+}
 
-  constructor() {
-    this.auth0 = new Auth0({
-      domain: config.auth0Domain,
+export interface User {
+  id: string;
+  email: string;
+  picture?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Auth0Credentials {
+  accessToken: string;
+  refreshToken?: string;
+  idToken?: string;
+  expiresIn?: number;
+}
+
+class AuthService {
+  private tokenRefreshTimeout?: NodeJS.Timeout;
+  private discoveryDocument: AuthSession.DiscoveryDocument | null = null;
+
+  /**
+   * Gets the discovery document (cached after first call)
+   */
+  private async getDiscovery(): Promise<AuthSession.DiscoveryDocument> {
+    if (!this.discoveryDocument) {
+      this.discoveryDocument = await AuthSession.fetchDiscoveryAsync(
+        `https://${config.auth0Domain}`
+      );
+    }
+    return this.discoveryDocument;
+  }
+
+  /**
+   * Creates an auth request for Auth0
+   */
+  private createAuthRequest() {
+    // For Expo Go, use native redirect (no custom scheme needed)
+    // For production builds, use custom scheme
+    const redirectUri = AuthSession.makeRedirectUri({
+      native: 'betthink://auth/callback',
+    });
+
+    logger.info('Auth redirect URI:', redirectUri);
+    console.log('🔐 Auth redirect URI:', redirectUri); // Also log to console for visibility
+
+    return new AuthSession.AuthRequest({
       clientId: config.auth0ClientId,
+      redirectUri,
+      responseType: AuthSession.ResponseType.Code,
+      scopes: ['openid', 'profile', 'email', 'offline_access'],
+      extraParams: {
+        audience: config.auth0Audience,
+      },
+      usePKCE: true,
     });
   }
 
@@ -30,10 +85,38 @@ class AuthService {
     try {
       logger.info('Initiating Auth0 login with PKCE');
 
-      const credentials = await this.auth0.webAuth.authorize({
-        scope: 'openid profile email offline_access',
-        audience: config.auth0Audience,
-      });
+      const discovery = await this.getDiscovery();
+      const authRequest = this.createAuthRequest();
+
+      const result = await authRequest.promptAsync(discovery);
+
+      if (result.type !== 'success') {
+        throw new Error(`Authentication failed: ${result.type}`);
+      }
+
+      if (!authRequest.codeVerifier) {
+        throw new Error('No code verifier available');
+      }
+
+      // Exchange code for tokens
+      const tokenResult = await AuthSession.exchangeCodeAsync(
+        {
+          clientId: config.auth0ClientId,
+          code: result.params.code,
+          redirectUri: authRequest.redirectUri,
+          extraParams: {
+            code_verifier: authRequest.codeVerifier,
+          },
+        },
+        discovery
+      );
+
+      const credentials: Auth0Credentials = {
+        accessToken: tokenResult.accessToken,
+        refreshToken: tokenResult.refreshToken,
+        idToken: tokenResult.idToken,
+        expiresIn: tokenResult.expiresIn,
+      };
 
       await this.storeCredentials(credentials);
       const user = await this.getUserInfo(credentials.accessToken);
@@ -51,6 +134,7 @@ class AuthService {
 
   /**
    * Logs out the user and clears stored credentials
+   * For client-side logout (stateless API), we only need to clear local credentials
    */
   async logout(): Promise<void> {
     try {
@@ -60,7 +144,7 @@ class AuthService {
         clearTimeout(this.tokenRefreshTimeout);
       }
 
-      await this.auth0.webAuth.clearSession();
+      // Clear local stored credentials
       await this.clearStoredCredentials();
 
       logger.info('Logout successful');
@@ -135,9 +219,21 @@ class AuthService {
 
       logger.debug('Refreshing access token');
 
-      const credentials = await this.auth0.auth.refreshToken({
-        refreshToken: tokens.refreshToken,
-      });
+      const discovery = await this.getDiscovery();
+      const tokenResult = await AuthSession.refreshAsync(
+        {
+          clientId: config.auth0ClientId,
+          refreshToken: tokens.refreshToken,
+        },
+        discovery
+      );
+
+      const credentials: Auth0Credentials = {
+        accessToken: tokenResult.accessToken,
+        refreshToken: tokenResult.refreshToken || tokens.refreshToken,
+        idToken: tokenResult.idToken,
+        expiresIn: tokenResult.expiresIn,
+      };
 
       await this.storeCredentials(credentials);
       this.scheduleTokenRefresh(credentials.expiresIn || 3600);
@@ -182,12 +278,21 @@ class AuthService {
    */
   private async getUserInfo(accessToken: string): Promise<User> {
     try {
-      const userInfo = await this.auth0.auth.userInfo({ token: accessToken });
+      const response = await fetch(`https://${config.auth0Domain}/userinfo`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user info');
+      }
+
+      const userInfo = await response.json();
 
       return {
         id: userInfo.sub,
         email: userInfo.email || '',
-        name: userInfo.name,
         picture: userInfo.picture,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -201,7 +306,7 @@ class AuthService {
   /**
    * Stores credentials securely
    */
-  private async storeCredentials(credentials: Credentials): Promise<void> {
+  private async storeCredentials(credentials: Auth0Credentials): Promise<void> {
     const expiresAt = Date.now() + (credentials.expiresIn || 3600) * 1000;
 
     await Promise.all([

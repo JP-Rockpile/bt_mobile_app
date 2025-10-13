@@ -11,6 +11,7 @@ import {
   Pressable,
   StatusBar,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,6 @@ import { useCreateThread, useSendMessage, useChatMessages } from '../src/hooks/u
 import { useSSEStream } from '../src/hooks/useSSEStream';
 import { databaseService } from '../src/services/database.service';
 import { useAuthStore } from '../src/stores/auth.store';
-import { authService } from '../src/services/auth.service';
 import type { ChatMessage as ChatMessageType } from '@betthink/shared';
 
 const EXAMPLE_PROMPTS = [
@@ -43,9 +43,10 @@ const EXAMPLE_PROMPTS = [
 export default function Page() {
   const [inputText, setInputText] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, login, logout } = useAuthStore();
 
   // Hooks for conversation and message management
   const createThread = useCreateThread();
@@ -121,10 +122,27 @@ export default function Page() {
 
   const handleSignIn = async () => {
     try {
-      await authService.login();
+      await login();
     } catch (error) {
       console.error('Login failed:', error);
     }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      setMenuVisible(false);
+      // This calls Auth0's clearSession and clears stored credentials
+      await logout();
+      // Clear conversation state
+      setCurrentConversationId(null);
+      setInputText('');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const toggleMenu = () => {
+    setMenuVisible(!menuVisible);
   };
 
   // Track if we just created a new conversation that needs streaming
@@ -178,7 +196,7 @@ export default function Page() {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Pressable style={styles.menuButton}>
+            <Pressable style={styles.menuButton} onPress={toggleMenu}>
               <Ionicons name="menu" size={24} color="#ECECEC" />
             </Pressable>
             <Text style={styles.headerTitle}>BetGPT</Text>
@@ -188,10 +206,47 @@ export default function Page() {
               </Pressable>
             ) : (
               <View style={styles.userInfo}>
-                <Text style={styles.userName}>{user?.name || user?.email || 'User'}</Text>
+                <Text style={styles.userName}>{user?.email || 'User'}</Text>
               </View>
             )}
           </View>
+
+          {/* Menu Modal */}
+          <Modal
+            visible={menuVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setMenuVisible(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+              <View style={styles.menuContainer}>
+                {isAuthenticated && (
+                  <>
+                    <View style={styles.menuHeader}>
+                      <Ionicons name="person-circle" size={40} color="#ECECEC" />
+                      <View style={styles.menuUserInfo}>
+                        <Text style={styles.menuUserName}>
+                          {user?.email || 'User'}
+                        </Text>
+                        <Text style={styles.menuUserEmail}>
+                          {user?.id ? `ID: ${user.id.split('|')[1]?.substring(0, 8)}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.menuDivider} />
+                  </>
+                )}
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleSignOut}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="log-out-outline" size={24} color="#FF6B6B" />
+                  <Text style={styles.menuItemTextSignOut}>Sign Out</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Modal>
 
           {/* Main Content */}
           {!showChat ? (
@@ -479,5 +534,61 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#4A5E7B',
     opacity: 0.6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  menuContainer: {
+    marginTop: 60,
+    marginLeft: 16,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 12,
+    minWidth: 250,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  menuUserInfo: {
+    flex: 1,
+  },
+  menuUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ECECEC',
+    marginBottom: 2,
+  },
+  menuUserEmail: {
+    fontSize: 14,
+    color: '#98989D',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#3A3A3C',
+    marginVertical: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  menuItemTextSignOut: {
+    fontSize: 16,
+    color: '#FF6B6B',
+    fontWeight: '500',
   },
 });

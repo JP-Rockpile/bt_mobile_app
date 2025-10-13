@@ -31,6 +31,14 @@
           <string>com.betthink.app.dev</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>auth0</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.betthink.app.dev.auth0</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>

@@ -99,6 +99,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Note: These are NOT config plugins, they're just libraries imported in code:
     // - expo-sqlite  
     // - expo-web-browser
+    // - expo-auth-session (used for Auth0 authentication)
   ],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',

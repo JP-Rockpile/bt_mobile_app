@@ -12,6 +12,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { lightTheme, darkTheme } from './src/theme';
 import { queryClient } from './src/config/react-query';
 import { useUIStore } from './src/stores/ui.store';
+import { useAuthStore } from './src/stores/auth.store';
 import { databaseService } from './src/services/database.service';
 import { notificationService } from './src/services/notification.service';
 import { analyticsService } from './src/services/analytics.service';
@@ -21,6 +22,7 @@ import { config } from './src/config';
 
 function AppContent() {
   const { effectiveTheme, updateEffectiveTheme } = useUIStore();
+  const { initialize: initializeAuth } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -46,6 +48,7 @@ function AppContent() {
         databaseService.initialize(),
         analyticsService.initialize(),
         notificationService.initialize(),
+        initializeAuth(),
       ]);
 
       // Initialize error tracking (synchronous)
