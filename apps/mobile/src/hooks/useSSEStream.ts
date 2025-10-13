@@ -43,6 +43,9 @@ export const useSSEStream = ({
         
         errorTrackingService.captureSSEError(threadId, new Error(errorMsg));
         logger.error('SSE stream error', { threadId, error: errorMsg });
+        
+        // Close connection on error
+        sseService.closeConnection(connectionIdRef.current);
       } else if (chunk.type === 'done') {
         const responseTime = Date.now() - startTimeRef.current;
         analyticsService.trackChatMessageReceived(threadId, responseTime);
@@ -52,6 +55,12 @@ export const useSSEStream = ({
         onComplete?.(streamedContent);
         
         logger.info('SSE stream completed', { threadId, responseTime });
+        
+        // Connection will be closed automatically by sse.service when 'done' is received
+      } else if ((chunk as any).type === 'heartbeat') {
+        // Heartbeat events are handled by the service layer for connection keep-alive
+        // No action needed here
+        logger.debug('SSE heartbeat received', { threadId });
       }
     },
     [threadId, streamedContent, appendStreamChunk, endStream, setStreamError, onComplete, onError]
@@ -87,8 +96,11 @@ export const useSSEStream = ({
     [threadId, isStreaming]
   );
 
-  const startStreaming = useCallback(() => {
+  const startStreaming = useCallback(async () => {
     if (!enabled) return;
+
+    // Ensure any existing connection is closed before starting a new one
+    sseService.closeConnection(connectionIdRef.current);
 
     setIsStreaming(true);
     setStreamedContent('');
@@ -97,13 +109,17 @@ export const useSSEStream = ({
 
     startStream(threadId);
 
+    // Small delay to ensure backend has processed the message
+    // This helps avoid race conditions where stream connects before message is saved
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const streamUrl = chatApi.getStreamUrl(threadId);
     const connection = sseService.createConnection(connectionIdRef.current, {
       url: streamUrl,
       onMessage: handleMessage,
       onError: handleError,
       onConnectionChange: handleConnectionChange,
-      maxRetries: 5,
+      maxRetries: 3, // Reduced retries since we shouldn't reconnect after completion
       retryDelay: 1000,
     });
 

@@ -327,12 +327,12 @@ export const useChatSSE = ({
     setStatus('disconnected');
     onDisconnectRef.current?.();
 
-    // Attempt reconnect if not manually disconnected
-    if (!isManualDisconnectRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
-      logger.info('Stream ended, attempting reconnect', { conversationId });
-      scheduleReconnect();
-    }
-  }, [conversationId, maxReconnectAttempts]);
+    // Don't automatically reconnect after stream completion
+    // The stream ends after each LLM response (after 'llm_complete')
+    // A new connection should be explicitly opened when needed
+    logger.info('Stream ended naturally (LLM response complete)', { conversationId });
+    isManualDisconnectRef.current = true; // Mark as manual to prevent reconnection
+  }, [conversationId]);
 
   /**
    * Schedules a reconnection attempt with exponential backoff

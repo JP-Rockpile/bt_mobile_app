@@ -49,6 +49,11 @@ class SSEConnection {
     logger.info('Establishing SSE connection', { url: this.options.url });
 
     try {
+      logger.debug('SSE fetch starting...', { 
+        url: this.options.url,
+        hasToken: !!accessToken 
+      });
+      
       const response = await fetch(this.options.url, {
         method: 'GET',
         headers: {
@@ -59,14 +64,35 @@ class SSEConnection {
         signal: this.abortController.signal,
       });
 
+      logger.debug('SSE fetch completed', { 
+        status: response.status,
+        statusText: response.statusText,
+        hasBody: !!response.body,
+        headers: {
+          contentType: response.headers.get('content-type'),
+          cacheControl: response.headers.get('cache-control'),
+        }
+      });
+
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unable to read error');
+        logger.error('SSE connection failed with non-OK status', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText.substring(0, 200)
+        });
         throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
       }
 
       if (!response.body) {
+        logger.error('SSE response has no body', {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries())
+        });
         throw new Error('Response body is null');
       }
 
+      logger.debug('SSE connection established, starting to process stream');
       this.options.onConnectionChange?.(true);
       this.reconnectAttempts = 0;
 
@@ -76,6 +102,11 @@ class SSEConnection {
         logger.debug('SSE connection aborted');
         return;
       }
+      logger.error('SSE connection error in establishConnection', {
+        error: error.message,
+        name: error.name,
+        stack: error.stack?.substring(0, 200)
+      });
       throw error;
     }
   }
@@ -86,23 +117,35 @@ class SSEConnection {
     let buffer = '';
 
     try {
+      logger.debug('SSE stream processing started');
+      let chunkCount = 0;
+      
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          logger.info('SSE stream completed');
+          logger.info('SSE stream completed', { totalChunks: chunkCount, bufferRemaining: buffer.length });
           if (!this.isManualClose) {
             this.handleStreamEnd();
           }
           break;
         }
 
-        buffer += decoder.decode(value, { stream: true });
+        chunkCount++;
+        const decodedChunk = decoder.decode(value, { stream: true });
+        logger.debug('SSE chunk received', { 
+          chunkNumber: chunkCount, 
+          size: value.length,
+          preview: decodedChunk.substring(0, 100)
+        });
+
+        buffer += decodedChunk;
         const lines = buffer.split('\n\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.trim()) {
+            logger.debug('SSE event text', { eventText: line });
             this.parseAndHandleEvent(line);
           }
         }
@@ -123,16 +166,52 @@ class SSEConnection {
     if (!event.data) return;
 
     try {
-      const chunk: StreamChunk = JSON.parse(event.data);
-      this.options.onMessage(chunk);
+      let parsedEvent = JSON.parse(event.data);
+      
+      // Backend wraps SSE events in {data: {...}} - unwrap it
+      if (parsedEvent.data && typeof parsedEvent.data === 'object') {
+        logger.debug('Unwrapping backend data wrapper', { 
+          wrapped: Object.keys(parsedEvent),
+          unwrapped: Object.keys(parsedEvent.data)
+        });
+        parsedEvent = parsedEvent.data;
+      }
+      
+      // Handle both ChatSSEEvent format (from backend reference) and StreamChunk format
+      // Backend might send 'llm_complete' or 'done' to indicate completion
+      const normalizedChunk = this.normalizeEventFormat(parsedEvent);
+      
+      this.options.onMessage(normalizedChunk);
 
-      if (chunk.type === 'done') {
-        logger.debug('Stream marked as done');
+      // Close connection when stream is complete
+      if (normalizedChunk.type === 'done') {
+        logger.debug('Stream marked as done, closing connection');
         this.close();
       }
     } catch (error) {
       logger.error('Failed to parse SSE event data', { eventText, error });
     }
+  }
+  
+  private normalizeEventFormat(event: any): StreamChunk {
+    // If backend sends 'llm_chunk' format, convert to 'content' format
+    if (event.type === 'llm_chunk' && event.content) {
+      return { type: 'content', content: event.content };
+    }
+    
+    // If backend sends 'llm_complete', convert to 'done' format
+    if (event.type === 'llm_complete') {
+      return { type: 'done' };
+    }
+    
+    // If backend sends 'connected' or 'heartbeat', ignore (don't forward to handler)
+    if (event.type === 'connected' || event.type === 'heartbeat') {
+      logger.debug(`SSE ${event.type} event received`);
+      return { type: 'heartbeat' } as any; // Return a no-op event
+    }
+    
+    // Pass through other events (error, done, content) as-is
+    return event as StreamChunk;
   }
 
   private parseSSEEvent(eventText: string): SSEEvent {
@@ -170,14 +249,13 @@ class SSEConnection {
   }
 
   private handleStreamEnd(): void {
-    // Stream ended naturally, could be due to completion or server closing
+    // Stream ended naturally (likely after LLM response completion)
     this.options.onConnectionChange?.(false);
     
-    // Only attempt reconnect if we haven't reached max retries
-    if (this.reconnectAttempts < this.maxRetries) {
-      logger.info('SSE stream ended, attempting reconnect');
-      this.scheduleReconnect();
-    }
+    // Don't automatically reconnect - the stream ends after each message response
+    // A new connection will be opened when the user sends the next message
+    logger.info('SSE stream ended naturally (LLM response complete)');
+    this.isManualClose = true; // Mark as manual to prevent reconnection attempts
   }
 
   private scheduleReconnect(): void {
