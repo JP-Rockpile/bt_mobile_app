@@ -20,6 +20,7 @@ import { useSSEStream } from '../src/hooks/useSSEStream';
 import { databaseService } from '../src/services/database.service';
 import { useAuthStore } from '../src/stores/auth.store';
 import type { ChatMessage as ChatMessageType } from '@betthink/shared';
+import LandingScreen from '../src/screens/LandingScreen';
 
 const EXAMPLE_PROMPTS = [
   {
@@ -145,6 +146,30 @@ export default function Page() {
     setMenuVisible(!menuVisible);
   };
 
+  const handleNewChat = () => {
+    setMenuVisible(false);
+    setCurrentConversationId(null);
+    setInputText('');
+  };
+
+  const handleTermsOfUse = () => {
+    setMenuVisible(false);
+    // TODO: Navigate to Terms of Use screen or open web view
+    console.log('Terms of Use pressed');
+  };
+
+  const handlePrivacyPolicy = () => {
+    setMenuVisible(false);
+    // TODO: Navigate to Privacy Policy screen or open web view
+    console.log('Privacy Policy pressed');
+  };
+
+  const handleSettings = () => {
+    setMenuVisible(false);
+    // TODO: Navigate to Settings screen
+    console.log('Settings pressed');
+  };
+
   // Track if we just created a new conversation that needs streaming
   const [needsStreaming, setNeedsStreaming] = useState(false);
 
@@ -185,6 +210,11 @@ export default function Page() {
     }
   }, [displayMessages.length, showChat]);
 
+  // Show landing screen if not authenticated
+  if (!isAuthenticated) {
+    return <LandingScreen onAuthenticated={() => {}} />;
+  }
+
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1A1A1A" />
@@ -220,30 +250,56 @@ export default function Page() {
           >
             <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
               <View style={styles.menuContainer}>
-                {isAuthenticated && (
-                  <>
-                    <View style={styles.menuHeader}>
-                      <Ionicons name="person-circle" size={40} color="#ECECEC" />
-                      <View style={styles.menuUserInfo}>
-                        <Text style={styles.menuUserName}>
-                          {user?.email || 'User'}
-                        </Text>
-                        <Text style={styles.menuUserEmail}>
-                          {user?.id ? `ID: ${user.id.split('|')[1]?.substring(0, 8)}` : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.menuDivider} />
-                  </>
-                )}
+                {/* New Chat Button */}
                 <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={handleSignOut}
+                  style={styles.newChatButton}
+                  onPress={handleNewChat}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="log-out-outline" size={24} color="#FF6B6B" />
-                  <Text style={styles.menuItemTextSignOut}>Sign Out</Text>
+                  <Ionicons name="create-outline" size={20} color="#ECECEC" />
+                  <Text style={styles.newChatText}>New chat</Text>
                 </TouchableOpacity>
+
+                <View style={styles.menuDivider} />
+
+                {/* Menu Items */}
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleTermsOfUse}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuItemText}>Terms of Use</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handlePrivacyPolicy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuItemText}>Privacy Policy</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleSettings}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuItemText}>Settings</Text>
+                </TouchableOpacity>
+
+                {isAuthenticated && (
+                  <>
+                    <View style={styles.menuDivider} />
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={handleSignOut}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="log-out-outline" size={20} color="#FF6B6B" />
+                      <Text style={styles.menuItemTextSignOut}>Sign Out</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </Pressable>
           </Modal>
@@ -546,48 +602,46 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     backgroundColor: '#2C2C2E',
     borderRadius: 12,
-    minWidth: 250,
-    paddingVertical: 8,
+    minWidth: 260,
+    paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 5,
   },
-  menuHeader: {
+  newChatButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 12,
+    gap: 10,
   },
-  menuUserInfo: {
-    flex: 1,
-  },
-  menuUserName: {
+  newChatText: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#ECECEC',
-    marginBottom: 2,
-  },
-  menuUserEmail: {
-    fontSize: 14,
-    color: '#98989D',
+    fontWeight: '500',
   },
   menuDivider: {
     height: 1,
     backgroundColor: '#3A3A3C',
     marginVertical: 8,
+    marginHorizontal: 12,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  menuItemText: {
+    fontSize: 15,
+    color: '#ECECEC',
+    fontWeight: '400',
   },
   menuItemTextSignOut: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FF6B6B',
     fontWeight: '500',
   },
