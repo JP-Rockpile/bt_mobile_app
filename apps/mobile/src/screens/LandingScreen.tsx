@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,15 +8,15 @@ import {
   StatusBar,
   ActivityIndicator,
   Modal,
-  Pressable,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../stores/auth.store';
+import { useLocation } from '../hooks/useLocation';
 import TermsOfServiceScreen from './TermsOfServiceScreen';
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
+import LocationPermissionModal from '../components/LocationPermissionModal';
 
 export default function LandingScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
@@ -24,9 +24,26 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuthStore();
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [waitingForLocation, setWaitingForLocation] = useState(false);
+  const { login, setLocation, setLocationPermissionAsked, locationPermissionAsked } = useAuthStore();
+  const {
+    location,
+    permissionStatus,
+    isLoading: locationLoading,
+    error: locationError,
+    requestPermission,
+  } = useLocation();
 
-  const handleAuth = async (isSignUp: boolean = false) => {
+  // Watch for location updates after permission is granted
+  useEffect(() => {
+    if (waitingForLocation && location) {
+      setLocation(location);
+      setWaitingForLocation(false);
+    }
+  }, [location, waitingForLocation, setLocation]);
+
+  const handleAuth = async () => {
     if (!disclaimerAccepted) {
       setShowDisclaimerModal(true);
       return;
@@ -35,12 +52,53 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
     try {
       setIsLoading(true);
       await login();
-      onAuthenticated();
+      
+      // Show location permission modal after successful login if not asked before
+      if (!locationPermissionAsked) {
+        setShowLocationModal(true);
+        // DON'T call onAuthenticated() here - let the modal handle it
+      } else {
+        onAuthenticated();
+      }
     } catch (error) {
       console.error('Authentication failed:', error);
-    } finally {
+      // If login fails, still stop loading
       setIsLoading(false);
+    } finally {
+      // Only set loading to false if we're not showing the location modal
+      if (locationPermissionAsked) {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleLocationPermission = async () => {
+    try {
+      setWaitingForLocation(true);
+      await requestPermission();
+      
+      // Location will be saved by useEffect when it updates
+      // For now, just proceed
+      setLocationPermissionAsked(true);
+      setShowLocationModal(false);
+      setIsLoading(false);
+      onAuthenticated();
+    } catch (error) {
+      console.error('Location permission failed:', error);
+      setWaitingForLocation(false);
+      // Continue to app even if location permission fails
+      setLocationPermissionAsked(true);
+      setShowLocationModal(false);
+      setIsLoading(false);
+      onAuthenticated();
+    }
+  };
+
+  const handleSkipLocation = () => {
+    setLocationPermissionAsked(true);
+    setShowLocationModal(false);
+    setIsLoading(false);
+    onAuthenticated();
   };
 
   const handleDisclaimerAccept = () => {
@@ -117,7 +175,7 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
           <View style={styles.buttonSection}>
             <TouchableOpacity
               style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-              onPress={() => handleAuth(false)}
+              onPress={handleAuth}
               disabled={isLoading}
               activeOpacity={0.8}
             >
@@ -139,7 +197,7 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
 
             <TouchableOpacity
               style={[styles.secondaryButton, isLoading && styles.buttonDisabled]}
-              onPress={() => handleAuth(true)}
+              onPress={handleAuth}
               disabled={isLoading}
               activeOpacity={0.8}
             >
@@ -157,6 +215,16 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
 
         {/* Privacy Policy Modal */}
         <PrivacyPolicyScreen visible={showPrivacy} onClose={() => setShowPrivacy(false)} />
+
+        {/* Location Permission Modal */}
+        <LocationPermissionModal
+          visible={showLocationModal}
+          isLoading={locationLoading}
+          error={locationError}
+          onRequestPermission={handleLocationPermission}
+          onSkip={handleSkipLocation}
+          permissionDenied={permissionStatus?.status === 'denied' && !permissionStatus?.canAskAgain}
+        />
 
         {/* Disclaimer Modal */}
         <Modal

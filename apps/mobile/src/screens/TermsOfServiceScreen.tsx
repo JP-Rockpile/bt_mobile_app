@@ -69,6 +69,11 @@ export default function TermsOfServiceScreen({ visible, onClose }: TermsOfServic
               purposes only and should not be construed as professional advice or a guarantee
               of outcomes.
             </Text>
+            <Text style={[styles.text, styles.marginTop]}>
+              To provide relevant sportsbook information and ensure regulatory compliance, we
+              may request access to your approximate location. This helps us show you betting
+              options that are legally available in your state or region.
+            </Text>
           </Section>
 
           <Section title="4. No Warranties">
@@ -98,6 +103,12 @@ export default function TermsOfServiceScreen({ visible, onClose }: TermsOfServic
               </Text>
               <Text style={styles.bulletText}>
                 • Misuse or redistribute any part of the content without authorization
+              </Text>
+              <Text style={styles.bulletText}>
+                • Attempt to circumvent location-based restrictions or misrepresent your location
+              </Text>
+              <Text style={styles.bulletText}>
+                • Use the Service in jurisdictions where sports betting is prohibited
               </Text>
             </View>
           </Section>
@@ -222,6 +233,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     color: '#A3A3A3',
+  },
+  marginTop: {
+    marginTop: 12,
   },
   bulletList: {
     marginTop: 8,

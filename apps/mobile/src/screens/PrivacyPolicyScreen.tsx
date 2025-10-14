@@ -83,7 +83,29 @@ export default function PrivacyPolicyScreen({ visible, onClose }: PrivacyPolicyS
               </View>
             </SubSection>
 
-            <SubSection title="C. Third-Party Information">
+            <SubSection title="C. Location Information">
+              <Text style={[styles.text, styles.marginTop]}>
+                With your explicit permission, we collect your approximate geographic location to:
+              </Text>
+              <View style={styles.bulletList}>
+                <Text style={styles.bulletText}>
+                  • Determine which sportsbooks are legally available in your state/region
+                </Text>
+                <Text style={styles.bulletText}>
+                  • Provide location-specific betting recommendations and odds
+                </Text>
+                <Text style={styles.bulletText}>
+                  • Comply with gambling regulations in your jurisdiction
+                </Text>
+              </View>
+              <Text style={[styles.text, styles.marginTop]}>
+                We collect your location only when you grant permission through your device settings.
+                You can revoke this permission at any time through your device settings. We do not
+                continuously track your location and only retrieve it when needed to provide our services.
+              </Text>
+            </SubSection>
+
+            <SubSection title="D. Third-Party Information">
               <View style={styles.bulletList}>
                 <Text style={styles.bulletText}>
                   • Data from third-party services you connect (e.g., social login)
@@ -100,6 +122,12 @@ export default function PrivacyPolicyScreen({ visible, onClose }: PrivacyPolicyS
             <View style={styles.bulletList}>
               <Text style={styles.bulletText}>• Operate, maintain, and improve BetThink</Text>
               <Text style={styles.bulletText}>• Personalize your experience and insights</Text>
+              <Text style={styles.bulletText}>
+                • Show you available sportsbooks and betting options in your state/region
+              </Text>
+              <Text style={styles.bulletText}>
+                • Ensure compliance with state and federal gambling regulations
+              </Text>
               <Text style={styles.bulletText}>• Respond to user inquiries or support tickets</Text>
               <Text style={styles.bulletText}>• Monitor usage and performance</Text>
               <Text style={styles.bulletText}>• Communicate important updates or service changes</Text>

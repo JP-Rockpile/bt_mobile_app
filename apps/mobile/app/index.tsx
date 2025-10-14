@@ -45,6 +45,7 @@ export default function Page() {
   const [inputText, setInputText] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [landingComplete, setLandingComplete] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const { user, isAuthenticated, login, logout } = useAuthStore();
@@ -210,9 +211,9 @@ export default function Page() {
     }
   }, [displayMessages.length, showChat]);
 
-  // Show landing screen if not authenticated
-  if (!isAuthenticated) {
-    return <LandingScreen onAuthenticated={() => {}} />;
+  // Show landing screen if not authenticated OR if landing flow not complete
+  if (!isAuthenticated || !landingComplete) {
+    return <LandingScreen onAuthenticated={() => setLandingComplete(true)} />;
   }
 
   return (

@@ -2,10 +2,13 @@ import { create } from 'zustand';
 import { authService } from '@/services/auth.service';
 import { logger } from '@/utils/logger';
 import type { User, AuthTokens } from '@/services/auth.service';
+import type { UserLocation } from '@/services/location.service';
 
 interface AuthState {
   user: User | null;
   tokens: AuthTokens | null;
+  location: UserLocation | null;
+  locationPermissionAsked: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
@@ -17,11 +20,15 @@ interface AuthState {
   refreshTokens: () => Promise<void>;
   setUser: (user: User | null) => void;
   setError: (error: string | null) => void;
+  setLocation: (location: UserLocation | null) => void;
+  setLocationPermissionAsked: (asked: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   tokens: null,
+  location: null,
+  locationPermissionAsked: false,
   isLoading: true,
   isAuthenticated: false,
   error: null,
@@ -96,6 +103,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: null,
         tokens: null,
+        location: null,
+        locationPermissionAsked: false,
         isAuthenticated: false,
         isLoading: false,
       });
@@ -139,5 +148,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setError: (error) => {
     set({ error });
+  },
+
+  setLocation: (location) => {
+    set({ location });
+    if (location) {
+      logger.info('User location set', { state: location.state, country: location.country });
+    }
+  },
+
+  setLocationPermissionAsked: (asked) => {
+    set({ locationPermissionAsked: asked });
   },
 }));
