@@ -28,6 +28,9 @@ export interface User {
   picture?: string;
   createdAt: string;
   updatedAt: string;
+  dateOfBirth?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 interface Auth0Credentials {
@@ -35,6 +38,19 @@ interface Auth0Credentials {
   refreshToken?: string;
   idToken?: string;
   expiresIn?: number;
+}
+
+export interface SignupData {
+  email: string;
+  password: string;
+  dateOfBirth: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
 }
 
 class AuthService {
@@ -79,7 +95,7 @@ class AuthService {
   }
 
   /**
-   * Initiates Auth0 Universal Login with PKCE
+   * Initiates Auth0 Universal Login with PKCE (for social logins)
    */
   async login(): Promise<User> {
     try {
@@ -129,6 +145,158 @@ class AuthService {
     } catch (error) {
       logger.error('Login failed', error);
       throw new Error('Authentication failed');
+    }
+  }
+
+  /**
+   * Sign up with email and password using Auth0 Database Connection
+   */
+  async signupWithPassword(data: SignupData): Promise<{ success: boolean; email: string }> {
+    try {
+      logger.info('Signing up with email/password');
+
+      const response = await fetch(`https://${config.auth0Domain}/dbconnections/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: config.auth0ClientId,
+          email: data.email,
+          password: data.password,
+          connection: 'Username-Password-Authentication',
+          user_metadata: {
+            date_of_birth: data.dateOfBirth,
+            first_name: data.firstName,
+            last_name: data.lastName,
+          },
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = responseData.description || responseData.message || 'Signup failed';
+        logger.error('Signup failed', { error: responseData });
+        throw new Error(errorMessage);
+      }
+
+      logger.info('Signup successful', { email: data.email });
+      return { success: true, email: data.email };
+    } catch (error) {
+      logger.error('Signup failed', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Signup failed. Please try again.');
+    }
+  }
+
+  /**
+   * Login with email and password using Auth0 Resource Owner Password Grant
+   */
+  async loginWithPassword(credentials: LoginCredentials): Promise<User> {
+    try {
+      logger.info('Logging in with email/password');
+
+      const requestBody = {
+        grant_type: 'password',
+        username: credentials.email,
+        password: credentials.password,
+        client_id: config.auth0ClientId,
+        audience: config.auth0Audience,
+        scope: 'openid profile email offline_access',
+        realm: 'Username-Password-Authentication',
+      };
+
+      logger.debug('Login request body:', { ...requestBody, password: '[REDACTED]' });
+
+      const response = await fetch(`https://${config.auth0Domain}/oauth/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = responseData.error_description || responseData.error || 'Login failed';
+        logger.error('Password login failed', { 
+          error: responseData,
+          status: response.status,
+          realm: 'Username-Password-Authentication'
+        });
+        
+        // Provide more user-friendly error messages
+        if (errorMessage.includes('Wrong email or password')) {
+          throw new Error('Invalid email or password');
+        } else if (errorMessage.includes('blocked')) {
+          throw new Error('Account temporarily blocked. Please try again later.');
+        } else if (errorMessage.includes('verify')) {
+          throw new Error('Please verify your email before logging in');
+        }
+        throw new Error(errorMessage);
+      }
+
+      const auth0Credentials: Auth0Credentials = {
+        accessToken: responseData.access_token,
+        refreshToken: responseData.refresh_token,
+        idToken: responseData.id_token,
+        expiresIn: responseData.expires_in,
+      };
+
+      await this.storeCredentials(auth0Credentials);
+      const user = await this.getUserInfo(auth0Credentials.accessToken);
+      await this.storeUser(user);
+
+      this.scheduleTokenRefresh(auth0Credentials.expiresIn || 3600);
+
+      logger.info('Password login successful', { userId: user.id });
+      return user;
+    } catch (error) {
+      logger.error('Password login failed', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Login failed. Please try again.');
+    }
+  }
+
+  /**
+   * Request password reset email
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    try {
+      logger.info('Requesting password reset', { email });
+
+      const response = await fetch(`https://${config.auth0Domain}/dbconnections/change_password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: config.auth0ClientId,
+          email: email,
+          connection: 'Username-Password-Authentication',
+        }),
+      });
+
+      // Auth0 returns 200 with a string response on success
+      if (!response.ok) {
+        const errorData = await response.json();
+        logger.error('Password reset request failed', { error: errorData });
+        throw new Error(errorData.message || 'Failed to send reset email');
+      }
+
+      logger.info('Password reset email sent', { email });
+    } catch (error) {
+      logger.error('Password reset request failed', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to send reset email. Please try again.');
     }
   }
 
@@ -294,6 +462,9 @@ class AuthService {
         id: userInfo.sub,
         email: userInfo.email || '',
         picture: userInfo.picture,
+        dateOfBirth: userInfo.user_metadata?.date_of_birth,
+        firstName: userInfo.user_metadata?.first_name || userInfo.given_name,
+        lastName: userInfo.user_metadata?.last_name || userInfo.family_name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

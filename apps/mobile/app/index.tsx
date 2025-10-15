@@ -147,12 +147,6 @@ export default function Page() {
     setMenuVisible(!menuVisible);
   };
 
-  const handleNewChat = () => {
-    setMenuVisible(false);
-    setCurrentConversationId(null);
-    setInputText('');
-  };
-
   const handleTermsOfUse = () => {
     setMenuVisible(false);
     // TODO: Navigate to Terms of Use screen or open web view
@@ -246,23 +240,11 @@ export default function Page() {
           <Modal
             visible={menuVisible}
             transparent
-            animationType="fade"
+            animationType="slide"
             onRequestClose={() => setMenuVisible(false)}
           >
-            <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+            <View style={styles.modalOverlay}>
               <View style={styles.menuContainer}>
-                {/* New Chat Button */}
-                <TouchableOpacity
-                  style={styles.newChatButton}
-                  onPress={handleNewChat}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="create-outline" size={20} color="#ECECEC" />
-                  <Text style={styles.newChatText}>New chat</Text>
-                </TouchableOpacity>
-
-                <View style={styles.menuDivider} />
-
                 {/* Menu Items */}
                 <TouchableOpacity
                   style={styles.menuItem}
@@ -302,7 +284,8 @@ export default function Page() {
                   </>
                 )}
               </View>
-            </Pressable>
+              <Pressable style={styles.overlayDismiss} onPress={() => setMenuVisible(false)} />
+            </View>
           </Modal>
 
           {/* Main Content */}
@@ -594,46 +577,51 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+  },
+  overlayDismiss: {
+    flex: 1,
   },
   menuContainer: {
-    marginTop: 60,
-    marginLeft: 16,
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
-    minWidth: 260,
-    paddingVertical: 12,
+    width: 280,
+    height: '100%',
+    backgroundColor: '#1A1A1A',
+    paddingTop: 60,
+    paddingBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   newChatButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+    backgroundColor: '#2C2C2E',
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 10,
   },
   newChatText: {
     fontSize: 16,
     color: '#ECECEC',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   menuDivider: {
     height: 1,
-    backgroundColor: '#3A3A3C',
-    marginVertical: 8,
-    marginHorizontal: 12,
+    backgroundColor: '#2C2C2E',
+    marginVertical: 12,
+    marginHorizontal: 16,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     gap: 10,
   },
   menuItemText: {
@@ -644,6 +632,6 @@ const styles = StyleSheet.create({
   menuItemTextSignOut: {
     fontSize: 15,
     color: '#FF6B6B',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

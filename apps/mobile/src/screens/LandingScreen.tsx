@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,8 +17,14 @@ import { useLocation } from '../hooks/useLocation';
 import TermsOfServiceScreen from './TermsOfServiceScreen';
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';
 import LocationPermissionModal from '../components/LocationPermissionModal';
+import LoginScreen from './LoginScreen';
+import SignupScreen from './SignupScreen';
+import ForgotPasswordScreen from './ForgotPasswordScreen';
+
+type AuthView = 'landing' | 'login' | 'signup' | 'forgotPassword';
 
 export default function LandingScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [currentView, setCurrentView] = useState<AuthView>('landing');
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
@@ -26,7 +32,7 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
   const [isLoading, setIsLoading] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [waitingForLocation, setWaitingForLocation] = useState(false);
-  const { login, setLocation, setLocationPermissionAsked, locationPermissionAsked } = useAuthStore();
+  const { setLocation, setLocationPermissionAsked, locationPermissionAsked } = useAuthStore();
   const {
     location,
     permissionStatus,
@@ -43,33 +49,43 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
     }
   }, [location, waitingForLocation, setLocation]);
 
-  const handleAuth = async () => {
+  const handleNavigateToLogin = () => {
     if (!disclaimerAccepted) {
       setShowDisclaimerModal(true);
       return;
     }
+    setCurrentView('login');
+  };
 
-    try {
-      setIsLoading(true);
-      await login();
-      
-      // Show location permission modal after successful login if not asked before
-      if (!locationPermissionAsked) {
-        setShowLocationModal(true);
-        // DON'T call onAuthenticated() here - let the modal handle it
-      } else {
-        onAuthenticated();
-      }
-    } catch (error) {
-      console.error('Authentication failed:', error);
-      // If login fails, still stop loading
-      setIsLoading(false);
-    } finally {
-      // Only set loading to false if we're not showing the location modal
-      if (locationPermissionAsked) {
-        setIsLoading(false);
-      }
+  const handleNavigateToSignup = () => {
+    if (!disclaimerAccepted) {
+      setShowDisclaimerModal(true);
+      return;
     }
+    setCurrentView('signup');
+  };
+
+  const handleAuthSuccess = () => {
+    // After successful login/signup, check location permission
+    if (!locationPermissionAsked) {
+      setShowLocationModal(true);
+    } else {
+      onAuthenticated();
+    }
+  };
+
+  const handleSignupSuccess = (email: string) => {
+    // Show success message and navigate to login
+    Alert.alert(
+      'Account Created! 📧',
+      `We've sent a verification email to ${email}. Please verify your email and then log in.`,
+      [
+        {
+          text: 'OK',
+          onPress: () => setCurrentView('login'),
+        },
+      ]
+    );
   };
 
   const handleLocationPermission = async () => {
@@ -106,6 +122,48 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
     setShowDisclaimerModal(false);
   };
 
+  // Render different views based on current state
+  if (currentView === 'login') {
+    return (
+      <>
+        <LoginScreen
+          onBack={() => setCurrentView('landing')}
+          onNavigateToSignup={() => setCurrentView('signup')}
+          onNavigateToForgotPassword={() => setCurrentView('forgotPassword')}
+          onSuccess={handleAuthSuccess}
+        />
+        <LocationPermissionModal
+          visible={showLocationModal}
+          isLoading={locationLoading}
+          error={locationError}
+          onRequestPermission={handleLocationPermission}
+          onSkip={handleSkipLocation}
+          permissionDenied={permissionStatus?.status === 'denied' && !permissionStatus?.canAskAgain}
+        />
+      </>
+    );
+  }
+
+  if (currentView === 'signup') {
+    return (
+      <SignupScreen
+        onBack={() => setCurrentView('landing')}
+        onNavigateToLogin={() => setCurrentView('login')}
+        onSuccess={handleSignupSuccess}
+      />
+    );
+  }
+
+  if (currentView === 'forgotPassword') {
+    return (
+      <ForgotPasswordScreen
+        onBack={() => setCurrentView('login')}
+        onSuccess={() => setCurrentView('login')}
+      />
+    );
+  }
+
+  // Landing view
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
@@ -175,29 +233,23 @@ export default function LandingScreen({ onAuthenticated }: { onAuthenticated: ()
           <View style={styles.buttonSection}>
             <TouchableOpacity
               style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-              onPress={handleAuth}
+              onPress={handleNavigateToLogin}
               disabled={isLoading}
               activeOpacity={0.8}
             >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <LinearGradient
-                    colors={['#6366F1', '#8B5CF6']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.buttonGradient}
-                  >
-                    <Text style={styles.primaryButtonText}>Log In</Text>
-                  </LinearGradient>
-                </>
-              )}
+              <LinearGradient
+                colors={['#6366F1', '#8B5CF6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.primaryButtonText}>Log In</Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.secondaryButton, isLoading && styles.buttonDisabled]}
-              onPress={handleAuth}
+              onPress={handleNavigateToSignup}
               disabled={isLoading}
               activeOpacity={0.8}
             >

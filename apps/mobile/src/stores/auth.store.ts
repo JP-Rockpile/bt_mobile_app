@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { authService } from '@/services/auth.service';
 import { logger } from '@/utils/logger';
-import type { User, AuthTokens } from '@/services/auth.service';
+import type { User, AuthTokens, SignupData, LoginCredentials } from '@/services/auth.service';
 import type { UserLocation } from '@/services/location.service';
 
 interface AuthState {
@@ -16,6 +16,9 @@ interface AuthState {
   // Actions
   initialize: () => Promise<void>;
   login: () => Promise<void>;
+  loginWithPassword: (credentials: LoginCredentials) => Promise<void>;
+  signupWithPassword: (data: SignupData) => Promise<{ success: boolean; email: string }>;
+  requestPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshTokens: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -89,6 +92,69 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Login failed',
+      });
+      throw error;
+    }
+  },
+
+  loginWithPassword: async (credentials: LoginCredentials) => {
+    try {
+      set({ isLoading: true, error: null });
+
+      const user = await authService.loginWithPassword(credentials);
+      const tokens = await authService.getTokens();
+
+      set({
+        user,
+        tokens,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+
+      logger.info('User logged in with password successfully');
+    } catch (error) {
+      logger.error('Password login failed', error);
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Login failed',
+      });
+      throw error;
+    }
+  },
+
+  signupWithPassword: async (data: SignupData) => {
+    try {
+      set({ isLoading: true, error: null });
+
+      const result = await authService.signupWithPassword(data);
+
+      set({ isLoading: false });
+      logger.info('User signed up successfully');
+
+      return result;
+    } catch (error) {
+      logger.error('Signup failed', error);
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Signup failed',
+      });
+      throw error;
+    }
+  },
+
+  requestPasswordReset: async (email: string) => {
+    try {
+      set({ isLoading: true, error: null });
+
+      await authService.requestPasswordReset(email);
+
+      set({ isLoading: false });
+      logger.info('Password reset requested successfully');
+    } catch (error) {
+      logger.error('Password reset request failed', error);
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Password reset failed',
       });
       throw error;
     }
