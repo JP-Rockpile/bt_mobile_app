@@ -15,6 +15,7 @@ import { useSSEStream } from '@/hooks/useSSEStream';
 import { useUIStore } from '@/stores/ui.store';
 import { useChatStore } from '@/stores/chat.store';
 import { databaseService } from '@/services/database.service';
+import { logger } from '@/utils/logger';
 import type { ChatMessage as ChatMessageType } from '@betthink/shared';
 import { spacing } from '@/theme';
 
@@ -37,6 +38,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ threadId }) => {
     isStreaming,
     streamedContent,
     error: streamError,
+    connectSSE,
     startStreaming,
   } = useSSEStream({
     threadId,
@@ -56,12 +58,26 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ threadId }) => {
         synced: true,
       });
 
+      // Refetch messages to show the completed message
       refetch();
+      
+      logger.info('Assistant message saved', { threadId, messageId: assistantMessage.id });
     },
     onError: (error) => {
-      console.error('Stream error:', error);
+      logger.error('Stream error in ChatScreen', { error, threadId });
     },
   });
+
+  // Open SSE connection when screen loads
+  useEffect(() => {
+    // Establish SSE connection when component mounts
+    // This creates a persistent connection for receiving LLM responses
+    connectSSE();
+    
+    logger.info('ChatScreen mounted, establishing SSE connection', { threadId });
+    
+    // Note: Connection cleanup is handled by useSSEStream hook
+  }, [threadId]); // Only re-connect if threadId changes, not connectSSE
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -73,19 +89,23 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ threadId }) => {
   }, [messages, streamedContent]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || sendMessage.isPending) return;
+    if (!inputText.trim() || sendMessage.isPending || isStreaming) return;
 
     const messageContent = inputText.trim();
     setInputText('');
 
     try {
-      // Send message
-      await sendMessage.mutateAsync(messageContent);
-
-      // Start streaming response
+      // Start streaming (sets isStreaming=true, starts timeout)
       startStreaming();
+
+      // Send message - backend will respond via SSE
+      await sendMessage.mutateAsync(messageContent);
+      
+      logger.info('Message sent, waiting for SSE response', { threadId });
     } catch (error) {
-      console.error('Failed to send message:', error);
+      logger.error('Failed to send message', { error, threadId });
+      // Reset streaming state on error
+      // This will be handled by the timeout, but we can also handle it here
     }
   };
 

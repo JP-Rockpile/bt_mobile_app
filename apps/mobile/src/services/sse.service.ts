@@ -18,6 +18,7 @@ class SSEConnection {
   private readonly retryDelay: number;
   private isManualClose = false;
   private reconnectTimeout?: NodeJS.Timeout;
+  private connected = false; // Track actual connection state
 
   constructor(private options: SSEOptions) {
     this.maxRetries = options.maxRetries ?? 5;
@@ -46,194 +47,188 @@ class SSEConnection {
 
     const accessToken = await authService.getValidAccessToken();
 
-    logger.info('Establishing SSE connection', { url: this.options.url });
+    logger.info('Establishing SSE connection with XMLHttpRequest', { url: this.options.url });
 
     try {
-      logger.debug('SSE fetch starting...', { 
-        url: this.options.url,
-        hasToken: !!accessToken 
-      });
-      
-      const response = await fetch(this.options.url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        signal: this.abortController.signal,
-      });
+      const xhr = new XMLHttpRequest();
+      let buffer = '';
 
-      logger.debug('SSE fetch completed', { 
-        status: response.status,
-        statusText: response.statusText,
-        hasBody: !!response.body,
-        headers: {
-          contentType: response.headers.get('content-type'),
-          cacheControl: response.headers.get('cache-control'),
+      xhr.open('GET', this.options.url);
+      xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+      xhr.setRequestHeader('Cache-Control', 'no-cache');
+
+      // Track XHR instance
+      (this as any).xhr = xhr;
+
+      xhr.onreadystatechange = () => {
+        logger.debug('XHR state change', { 
+          readyState: xhr.readyState, 
+          status: xhr.status,
+          responseLength: xhr.responseText?.length || 0
+        });
+
+        if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) {
+          logger.info('✅ SSE headers received', { status: xhr.status });
+          
+          if (xhr.status === 200) {
+            this.connected = true;
+            this.options.onConnectionChange?.(true);
+            this.reconnectAttempts = 0;
+          } else {
+            logger.error('SSE bad status', { status: xhr.status });
+            this.handleConnectionError(new Error(`HTTP ${xhr.status}`));
+          }
         }
-      });
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unable to read error');
-        logger.error('SSE connection failed with non-OK status', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText.substring(0, 200)
-        });
-        throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
-      }
+        if (xhr.readyState === XMLHttpRequest.LOADING || xhr.readyState === XMLHttpRequest.DONE) {
+          // Get new data since last check
+          const newData = xhr.responseText.substring(buffer.length);
+          
+          if (newData) {
+            logger.debug('📦 Received data', { size: newData.length });
+            buffer = xhr.responseText;
 
-      if (!response.body) {
-        logger.error('SSE response has no body', {
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-        throw new Error('Response body is null');
-      }
+            // Process complete SSE events (separated by \n\n)
+            const events = buffer.split('\n\n');
+            
+            // Keep last incomplete event in buffer
+            if (xhr.readyState !== XMLHttpRequest.DONE) {
+              buffer = events.pop() || '';
+            }
 
-      logger.debug('SSE connection established, starting to process stream');
-      this.options.onConnectionChange?.(true);
-      this.reconnectAttempts = 0;
+            for (const eventText of events) {
+              if (eventText.trim()) {
+                this.parseAndHandleEvent(eventText.trim());
+              }
+            }
+          }
+        }
 
-      await this.processStream(response.body);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        logger.debug('SSE connection aborted');
-        return;
-      }
-      logger.error('SSE connection error in establishConnection', {
-        error: error.message,
-        name: error.name,
-        stack: error.stack?.substring(0, 200)
-      });
-      throw error;
-    }
-  }
-
-  private async processStream(body: ReadableStream<Uint8Array>): Promise<void> {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      logger.debug('SSE stream processing started');
-      let chunkCount = 0;
-      
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) {
-          logger.info('SSE stream completed', { totalChunks: chunkCount, bufferRemaining: buffer.length });
-          if (!this.isManualClose) {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+          logger.info('SSE connection closed by server');
+          this.connected = false;
+          this.options.onConnectionChange?.(false);
+          
+          if (!this.isManualClose && xhr.status === 200) {
+            // Unexpected close, try to reconnect
             this.handleStreamEnd();
-          }
-          break;
-        }
-
-        chunkCount++;
-        const decodedChunk = decoder.decode(value, { stream: true });
-        logger.debug('SSE chunk received', { 
-          chunkNumber: chunkCount, 
-          size: value.length,
-          preview: decodedChunk.substring(0, 100)
-        });
-
-        buffer += decodedChunk;
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim()) {
-            logger.debug('SSE event text', { eventText: line });
-            this.parseAndHandleEvent(line);
+          } else if (xhr.status !== 200) {
+            this.handleConnectionError(new Error(`Connection failed: ${xhr.status}`));
           }
         }
-      }
-    } catch (error) {
-      if (!this.isManualClose) {
-        logger.error('Error processing SSE stream', error);
-        this.handleConnectionError(error as Error);
-      }
-    } finally {
-      reader.releaseLock();
+      };
+
+      xhr.onerror = (error) => {
+        logger.error('XHR error', { error });
+        this.handleConnectionError(new Error('XHR error'));
+      };
+
+      xhr.ontimeout = () => {
+        logger.error('XHR timeout');
+        this.handleConnectionError(new Error('Connection timeout'));
+      };
+
+      // Listen for abort signal
+      this.abortController.signal.addEventListener('abort', () => {
+        logger.debug('Aborting XHR');
+        xhr.abort();
+      });
+
+      xhr.send();
+      logger.debug('XHR request sent');
+
+    } catch (error: any) {
+      logger.error('Failed to establish SSE connection', {
+        error: error.message
+      });
+      this.handleConnectionError(error);
     }
   }
 
   private parseAndHandleEvent(eventText: string): void {
-    const event = this.parseSSEEvent(eventText);
-
-    if (!event.data) return;
-
     try {
-      let parsedEvent = JSON.parse(event.data);
+      // Extract data from SSE format
+      const lines = eventText.split('\n');
+      let dataLine = '';
       
-      // Backend wraps SSE events in {data: {...}} - unwrap it
-      if (parsedEvent.data && typeof parsedEvent.data === 'object') {
-        logger.debug('Unwrapping backend data wrapper', { 
-          wrapped: Object.keys(parsedEvent),
-          unwrapped: Object.keys(parsedEvent.data)
-        });
+      for (const line of lines) {
+        if (line.startsWith('data:')) {
+          dataLine += line.slice(5).trim();
+        }
+      }
+
+      if (!dataLine) {
+        logger.debug('No data in SSE event', { eventText: eventText.substring(0, 100) });
+        return;
+      }
+
+      logger.debug('📨 SSE event data', { data: dataLine.substring(0, 150) });
+
+      let parsedEvent = JSON.parse(dataLine);
+
+      // Backend wraps in {data: {...}} - unwrap
+      if (parsedEvent.data && typeof parsedEvent.data === 'object' && !parsedEvent.type) {
+        logger.debug('Unwrapping data wrapper');
         parsedEvent = parsedEvent.data;
       }
-      
-      // Handle both ChatSSEEvent format (from backend reference) and StreamChunk format
-      // Backend might send 'llm_complete' or 'done' to indicate completion
+
+      logger.debug('Event after unwrap', { type: parsedEvent.type });
+
       const normalizedChunk = this.normalizeEventFormat(parsedEvent);
       
+      logger.debug('Normalized event', { type: normalizedChunk.type });
+
       this.options.onMessage(normalizedChunk);
 
-      // Close connection when stream is complete
       if (normalizedChunk.type === 'done') {
-        logger.debug('Stream marked as done, closing connection');
-        this.close();
+        logger.info('✅ LLM response complete');
       }
     } catch (error) {
-      logger.error('Failed to parse SSE event data', { eventText, error });
+      logger.error('Failed to parse SSE event', { 
+        error: (error as Error).message,
+        eventText: eventText.substring(0, 200)
+      });
     }
   }
+
+  // processStream and parseAndHandleEvent are no longer needed with EventSource
+  // EventSource handles parsing automatically
   
   private normalizeEventFormat(event: any): StreamChunk {
     // If backend sends 'llm_chunk' format, convert to 'content' format
     if (event.type === 'llm_chunk' && event.content) {
+      logger.debug('Converting llm_chunk to content', { contentLength: event.content.length });
       return { type: 'content', content: event.content };
     }
     
     // If backend sends 'llm_complete', convert to 'done' format
+    // NOTE: Connection should remain open after this event
     if (event.type === 'llm_complete') {
-      return { type: 'done' };
+      logger.debug('Converting llm_complete to done', { contentLength: event.content?.length });
+      return { type: 'done', content: event.content };
     }
     
-    // If backend sends 'connected' or 'heartbeat', ignore (don't forward to handler)
+    // If backend sends 'connected' or 'heartbeat', pass through as heartbeat
     if (event.type === 'connected' || event.type === 'heartbeat') {
       logger.debug(`SSE ${event.type} event received`);
       return { type: 'heartbeat' } as any; // Return a no-op event
     }
     
-    // Pass through other events (error, done, content) as-is
+    // If backend sends 'error', pass through
+    if (event.type === 'error') {
+      logger.error('SSE error event', { message: event.message });
+      return { type: 'error', error: event.message || 'An error occurred' };
+    }
+    
+    // Pass through other events (done, content) as-is
     return event as StreamChunk;
   }
 
-  private parseSSEEvent(eventText: string): SSEEvent {
-    const lines = eventText.split('\n');
-    const event: SSEEvent = { event: 'message', data: '' };
-
-    for (const line of lines) {
-      if (line.startsWith('event:')) {
-        event.event = line.slice(6).trim();
-      } else if (line.startsWith('data:')) {
-        event.data += line.slice(5).trim();
-      } else if (line.startsWith('id:')) {
-        event.id = line.slice(3).trim();
-      } else if (line.startsWith('retry:')) {
-        event.retry = parseInt(line.slice(6).trim(), 10);
-      }
-    }
-
-    return event;
-  }
+  // parseSSEEvent no longer needed - EventSource handles this
 
   private handleConnectionError(error: Error): void {
+    this.connected = false; // Mark as disconnected
     this.options.onConnectionChange?.(false);
     this.options.onError?.(error);
 
@@ -249,13 +244,17 @@ class SSEConnection {
   }
 
   private handleStreamEnd(): void {
-    // Stream ended naturally (likely after LLM response completion)
+    // Stream ended naturally (server closed connection unexpectedly)
+    // In normal operation, SSE should stay open even after llm_complete events
+    this.connected = false; // Mark as disconnected
     this.options.onConnectionChange?.(false);
     
-    // Don't automatically reconnect - the stream ends after each message response
-    // A new connection will be opened when the user sends the next message
-    logger.info('SSE stream ended naturally (LLM response complete)');
-    this.isManualClose = true; // Mark as manual to prevent reconnection attempts
+    logger.warn('SSE stream ended unexpectedly, will attempt to reconnect');
+    
+    // Attempt to reconnect since this shouldn't happen in normal operation
+    if (!this.isManualClose && this.reconnectAttempts < this.maxRetries) {
+      this.scheduleReconnect();
+    }
   }
 
   private scheduleReconnect(): void {
@@ -278,10 +277,19 @@ class SSEConnection {
 
   close(): void {
     this.isManualClose = true;
+    this.connected = false;
 
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = undefined;
+    }
+
+    // Abort XHR if exists
+    const xhr = (this as any).xhr;
+    if (xhr) {
+      xhr.abort();
+      (this as any).xhr = null;
+      logger.debug('XHR aborted');
     }
 
     if (this.abortController) {
@@ -294,7 +302,7 @@ class SSEConnection {
   }
 
   isConnected(): boolean {
-    return this.abortController !== null && !this.isManualClose;
+    return this.connected && this.abortController !== null && !this.isManualClose;
   }
 }
 

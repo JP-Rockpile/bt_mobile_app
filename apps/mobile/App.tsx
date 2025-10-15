@@ -1,6 +1,8 @@
+// Polyfill for crypto.getRandomValues() - MUST be first!
+import 'react-native-get-random-values';
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
-import { Appearance, StatusBar } from 'react-native';
+import { Appearance, StatusBar, AppState, AppStateStatus } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -17,27 +19,48 @@ import { databaseService } from './src/services/database.service';
 import { notificationService } from './src/services/notification.service';
 import { analyticsService } from './src/services/analytics.service';
 import { errorTrackingService } from './src/services/error-tracking.service';
+import { authService } from './src/services/auth.service';
 import { logger } from './src/utils/logger';
 import { config } from './src/config';
 
 function AppContent() {
   const { effectiveTheme, updateEffectiveTheme } = useUIStore();
-  const { initialize: initializeAuth } = useAuthStore();
+  const { initialize: initializeAuth, isAuthenticated, refreshTokens } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     initializeApp();
 
     // Listen for system theme changes
-    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+    const themeSubscription = Appearance.addChangeListener(({ colorScheme }) => {
       updateEffectiveTheme(colorScheme);
     });
 
+    // Listen for app state changes (foreground/background)
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     return () => {
-      subscription.remove();
+      themeSubscription.remove();
+      appStateSubscription.remove();
       cleanup();
     };
   }, [updateEffectiveTheme]);
+
+  // Handle app state changes - refresh tokens when app comes to foreground
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'active' && isAuthenticated) {
+      logger.info('App came to foreground, checking token expiration');
+      try {
+        const isExpired = await authService.isTokenExpired();
+        if (isExpired) {
+          logger.info('Token expired while app was in background, refreshing...');
+          await refreshTokens();
+        }
+      } catch (error) {
+        logger.error('Failed to refresh token on app foreground', error);
+      }
+    }
+  };
 
   const initializeApp = async () => {
     try {

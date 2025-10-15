@@ -46,12 +46,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       ]);
 
       if (user && tokens) {
+        logger.info('Found stored user and tokens', {
+          userId: user.id,
+          email: user.email,
+          tokenExpiresAt: new Date(tokens.expiresAt).toISOString(),
+        });
+
         // Check if token is expired
         const isExpired = await authService.isTokenExpired();
         if (isExpired) {
-          logger.info('Token expired, refreshing...');
-          await get().refreshTokens();
+          logger.info('Token expired, attempting refresh...');
+          try {
+            await get().refreshTokens();
+          } catch (refreshError) {
+            logger.error('Token refresh failed during initialization', refreshError);
+            // If refresh fails, still set the user state but mark as unauthenticated
+            // This way the user sees they need to log in again, but we keep their user data
+            set({
+              user,
+              tokens: null,
+              isLoading: false,
+              isAuthenticated: false,
+              error: 'Your session has expired. Please log in again.',
+            });
+            return;
+          }
         } else {
+          logger.info('Token is still valid, user authenticated');
           set({
             user,
             tokens,
@@ -60,6 +81,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
         }
       } else {
+        logger.info('No stored credentials found, user needs to log in');
         set({ isLoading: false, isAuthenticated: false });
       }
     } catch (error) {
@@ -189,21 +211,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const tokens = await authService.refreshToken();
 
+      // Also update the user object to ensure it's fresh
+      const user = get().user;
+
       set({
         tokens,
         isAuthenticated: true,
+        isLoading: false,
+        error: null,
       });
 
-      logger.info('Tokens refreshed successfully');
-    } catch (error) {
-      logger.error('Token refresh failed', error);
-      // Clear auth state on refresh failure
-      set({
-        user: null,
-        tokens: null,
-        isAuthenticated: false,
-        error: 'Session expired. Please log in again.',
+      logger.info('Tokens refreshed successfully', {
+        userId: user?.id,
+        newExpiresAt: new Date(tokens.expiresAt).toISOString(),
       });
+    } catch (error) {
+      logger.error('Token refresh failed in store', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      
+      // Only clear auth state if it's a definitive failure
+      // (e.g., refresh token expired, not a network error)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const shouldClearAuth = 
+        errorMessage.includes('refresh token') || 
+        errorMessage.includes('invalid_grant') ||
+        errorMessage.includes('No refresh token available');
+
+      if (shouldClearAuth) {
+        logger.warn('Clearing auth state due to refresh token failure');
+        set({
+          user: null,
+          tokens: null,
+          isAuthenticated: false,
+          error: 'Your session has expired. Please log in again.',
+        });
+      } else {
+        logger.warn('Token refresh failed but keeping auth state for retry');
+        // Keep the user state but mark as not loading
+        set({
+          isLoading: false,
+          error: 'Failed to refresh session. Please try again.',
+        });
+      }
+      
       throw error;
     }
   },

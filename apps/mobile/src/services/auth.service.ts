@@ -372,7 +372,17 @@ class AuthService {
 
     const now = Date.now();
     const bufferMs = 5 * 60 * 1000; // 5 minutes
-    return now >= tokens.expiresAt - bufferMs;
+    const isExpired = now >= tokens.expiresAt - bufferMs;
+    
+    if (isExpired) {
+      logger.debug('Token is expired or expiring soon', {
+        expiresAt: new Date(tokens.expiresAt).toISOString(),
+        now: new Date(now).toISOString(),
+        hasRefreshToken: !!tokens.refreshToken,
+      });
+    }
+    
+    return isExpired;
   }
 
   /**
@@ -382,10 +392,14 @@ class AuthService {
     try {
       const tokens = await this.getTokens();
       if (!tokens?.refreshToken) {
+        logger.warn('No refresh token available for token refresh');
         throw new Error('No refresh token available');
       }
 
-      logger.debug('Refreshing access token');
+      logger.info('Refreshing access token', {
+        hasRefreshToken: !!tokens.refreshToken,
+        tokenExpiredAt: new Date(tokens.expiresAt).toISOString(),
+      });
 
       const discovery = await this.getDiscovery();
       const tokenResult = await AuthSession.refreshAsync(
@@ -406,7 +420,10 @@ class AuthService {
       await this.storeCredentials(credentials);
       this.scheduleTokenRefresh(credentials.expiresIn || 3600);
 
-      logger.info('Token refresh successful');
+      logger.info('Token refresh successful', {
+        newExpiresIn: credentials.expiresIn,
+        newExpiresAt: new Date(Date.now() + (credentials.expiresIn || 3600) * 1000).toISOString(),
+      });
 
       return {
         accessToken: credentials.accessToken,
@@ -415,10 +432,14 @@ class AuthService {
         idToken: credentials.idToken,
       };
     } catch (error) {
-      logger.error('Token refresh failed', error);
-      // If refresh fails, clear credentials and require re-login
-      await this.clearStoredCredentials();
-      throw new Error('Token refresh failed. Please log in again.');
+      logger.error('Token refresh failed', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+      
+      // Don't immediately clear credentials - the refresh token might still be valid
+      // Let the auth store handle the logout if needed
+      throw error instanceof Error ? error : new Error('Token refresh failed. Please log in again.');
     }
   }
 
@@ -520,16 +541,28 @@ class AuthService {
       clearTimeout(this.tokenRefreshTimeout);
     }
 
-    // Refresh 5 minutes before expiration
-    const refreshIn = Math.max((expiresIn - 300) * 1000, 60000); // Minimum 1 minute
+    // Refresh 5 minutes before expiration, or at 80% of token lifetime for short-lived tokens
+    const bufferSeconds = Math.min(300, expiresIn * 0.2); // 5 minutes or 20% of lifetime
+    const refreshIn = Math.max((expiresIn - bufferSeconds) * 1000, 60000); // Minimum 1 minute
 
     this.tokenRefreshTimeout = setTimeout(() => {
       this.refreshToken().catch((error) => {
         logger.error('Scheduled token refresh failed', error);
+        // Try again in 1 minute if refresh fails
+        setTimeout(() => {
+          this.refreshToken().catch((err) => {
+            logger.error('Retry token refresh also failed', err);
+          });
+        }, 60000);
       });
     }, refreshIn);
 
-    logger.debug(`Token refresh scheduled in ${refreshIn / 1000} seconds`);
+    const refreshAt = new Date(Date.now() + refreshIn);
+    logger.info(`Token refresh scheduled`, {
+      refreshInSeconds: refreshIn / 1000,
+      refreshAt: refreshAt.toISOString(),
+      tokenExpiresIn: expiresIn,
+    });
   }
 }
 

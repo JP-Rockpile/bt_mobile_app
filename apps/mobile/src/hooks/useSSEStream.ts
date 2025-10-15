@@ -20,14 +20,19 @@ export const useSSEStream = ({
   onError,
   enabled = true,
 }: UseSSEStreamOptions) => {
+  // Disable hook if threadId is empty
+  const isEnabled = enabled && !!threadId;
+  
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { startStream, appendStreamChunk, endStream, setStreamError } = useChatStore();
-  const connectionIdRef = useRef<string>(`stream-${threadId}`);
+  // Use threadId directly instead of ref since it can change
+  const connectionId = `stream-${threadId}`;
   const startTimeRef = useRef<number>(0);
+  const streamingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleMessage = useCallback(
     (chunk: StreamChunk) => {
@@ -41,6 +46,12 @@ export const useSSEStream = ({
         setStreamError(threadId, errorMsg);
         onError?.(errorMsg);
         
+        // Clear timeout on error
+        if (streamingTimeoutRef.current) {
+          clearTimeout(streamingTimeoutRef.current);
+          streamingTimeoutRef.current = null;
+        }
+        
         errorTrackingService.captureSSEError(threadId, new Error(errorMsg));
         logger.error('SSE stream error', { threadId, error: errorMsg });
         
@@ -50,13 +61,23 @@ export const useSSEStream = ({
         const responseTime = Date.now() - startTimeRef.current;
         analyticsService.trackChatMessageReceived(threadId, responseTime);
         
+        // Get the full content (either from chunk or accumulated buffer)
+        const fullContent = chunk.content || streamedContent;
+        
         setIsStreaming(false);
         endStream(threadId);
-        onComplete?.(streamedContent);
+        onComplete?.(fullContent);
+        
+        // Clear timeout on successful completion
+        if (streamingTimeoutRef.current) {
+          clearTimeout(streamingTimeoutRef.current);
+          streamingTimeoutRef.current = null;
+        }
         
         logger.info('SSE stream completed', { threadId, responseTime });
         
-        // Connection will be closed automatically by sse.service when 'done' is received
+        // NOTE: Connection remains open for next message
+        // Do NOT close the connection here
       } else if ((chunk as any).type === 'heartbeat') {
         // Heartbeat events are handled by the service layer for connection keep-alive
         // No action needed here
@@ -96,55 +117,104 @@ export const useSSEStream = ({
     [threadId, isStreaming]
   );
 
-  const startStreaming = useCallback(async () => {
-    if (!enabled) return;
+  const connectSSE = useCallback(async () => {
+    if (!isEnabled) {
+      logger.warn('connectSSE called but disabled', { threadId, enabled, hasThreadId: !!threadId });
+      return;
+    }
 
-    // Ensure any existing connection is closed before starting a new one
-    sseService.closeConnection(connectionIdRef.current);
+    if (!threadId) {
+      logger.error('connectSSE called with empty threadId - this should not happen');
+      return;
+    }
 
-    setIsStreaming(true);
-    setStreamedContent('');
-    setError(null);
-    startTimeRef.current = Date.now();
+    const currentConnectionId = `stream-${threadId}`;
+    
+    // Check if connection already exists
+    const existingConnection = sseService.getConnection(currentConnectionId);
+    
+    // Only create new connection if one doesn't exist or is not connected
+    if (!existingConnection || !existingConnection.isConnected()) {
+      logger.info('Creating new SSE connection', { 
+        threadId, 
+        connectionId: currentConnectionId,
+        existingConnection: !!existingConnection,
+        isConnected: existingConnection?.isConnected() 
+      });
+      
+      const streamUrl = chatApi.getStreamUrl(threadId);
+      logger.debug('SSE stream URL', { streamUrl: streamUrl.replace(/access_token=[^&]+/, 'access_token=REDACTED') });
+      
+      const connection = sseService.createConnection(currentConnectionId, {
+        url: streamUrl,
+        onMessage: (chunk) => {
+          logger.debug('SSE message received in useSSEStream', { type: chunk.type, hasContent: !!chunk.content });
+          handleMessage(chunk);
+        },
+        onError: handleError,
+        onConnectionChange: handleConnectionChange,
+        maxRetries: 5, // Allow retries for reconnection
+        retryDelay: 1000,
+      });
 
-    startStream(threadId);
-
-    // Small delay to ensure backend has processed the message
-    // This helps avoid race conditions where stream connects before message is saved
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const streamUrl = chatApi.getStreamUrl(threadId);
-    const connection = sseService.createConnection(connectionIdRef.current, {
-      url: streamUrl,
-      onMessage: handleMessage,
-      onError: handleError,
-      onConnectionChange: handleConnectionChange,
-      maxRetries: 3, // Reduced retries since we shouldn't reconnect after completion
-      retryDelay: 1000,
-    });
-
-    connection.connect();
-
-    logger.info('SSE streaming started', { threadId, url: streamUrl });
+      await connection.connect();
+      
+      logger.info('SSE connection initiated', { threadId, connectionId: currentConnectionId });
+      
+      // Small delay to ensure connection is established
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      logger.info('SSE connection setup complete', { threadId });
+    } else {
+      logger.debug('SSE connection already exists', { threadId, connectionId: currentConnectionId, isConnected: existingConnection.isConnected() });
+    }
   }, [
-    enabled,
+    isEnabled,
     threadId,
-    startStream,
     handleMessage,
     handleError,
     handleConnectionChange,
   ]);
 
+  const startStreaming = useCallback(() => {
+    // Clear any existing timeout
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+    }
+
+    // Reset streaming state for new message
+    setIsStreaming(true);
+    setStreamedContent('');
+    setError(null);
+    startTimeRef.current = Date.now();
+    startStream(threadId);
+
+    // Set timeout to reset streaming state if no response in 30 seconds
+    streamingTimeoutRef.current = setTimeout(() => {
+      logger.error('Streaming timeout - no response received', { threadId });
+      setIsStreaming(false);
+      setError('Response timeout. Please try again.');
+      endStream(threadId);
+      onError?.('Response timeout');
+    }, 30000);
+
+    logger.info('SSE streaming started', { threadId });
+  }, [threadId, startStream, endStream, onError]);
+
   const stopStreaming = useCallback(() => {
-    sseService.closeConnection(connectionIdRef.current);
+    const currentConnectionId = `stream-${threadId}`;
+    sseService.closeConnection(currentConnectionId);
     setIsStreaming(false);
     endStream(threadId);
-    logger.info('SSE streaming stopped', { threadId });
+    logger.info('SSE streaming stopped', { threadId, connectionId: currentConnectionId });
   }, [threadId, endStream]);
 
   useEffect(() => {
     return () => {
       // Cleanup on unmount
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+      }
       stopStreaming();
     };
   }, [stopStreaming]);
@@ -152,8 +222,9 @@ export const useSSEStream = ({
   return {
     isStreaming,
     streamedContent,
-    isConnected,
+    isConnected, // ✅ Already in return
     error,
+    connectSSE,
     startStreaming,
     stopStreaming,
   };

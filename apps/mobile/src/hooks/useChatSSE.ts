@@ -288,9 +288,11 @@ export const useChatSSE = ({
 
       await processStream(response);
 
-      // Stream ended naturally
+      // Stream ended naturally (server closed connection)
+      // This should NOT happen in normal operation - SSE should stay open
       if (!isManualDisconnectRef.current) {
-        handleStreamEnd();
+        logger.warn('SSE stream ended unexpectedly, attempting reconnect', { conversationId });
+        handleConnectionError(new Error('Stream ended unexpectedly'));
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -321,18 +323,10 @@ export const useChatSSE = ({
   }, [conversationId, maxReconnectAttempts]);
 
   /**
-   * Handles stream ending naturally
+   * Note: The SSE connection should remain open even after llm_complete events.
+   * The backend keeps the connection alive for multiple message exchanges.
+   * If the stream ends naturally (server closes), we should attempt to reconnect.
    */
-  const handleStreamEnd = useCallback(() => {
-    setStatus('disconnected');
-    onDisconnectRef.current?.();
-
-    // Don't automatically reconnect after stream completion
-    // The stream ends after each LLM response (after 'llm_complete')
-    // A new connection should be explicitly opened when needed
-    logger.info('Stream ended naturally (LLM response complete)', { conversationId });
-    isManualDisconnectRef.current = true; // Mark as manual to prevent reconnection
-  }, [conversationId]);
 
   /**
    * Schedules a reconnection attempt with exponential backoff

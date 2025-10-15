@@ -59,7 +59,9 @@ export default function Page() {
   const {
     isStreaming,
     streamedContent,
+    isConnected,
     error: streamError,
+    connectSSE,
     startStreaming,
   } = useSSEStream({
     threadId: currentConversationId || '',
@@ -88,6 +90,9 @@ export default function Page() {
     },
   });
 
+  // Track pending first message to send after connection is ready
+  const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
+  
   const handleSend = async () => {
     if (!inputText.trim() || sendMessage.isPending || isStreaming) return;
 
@@ -97,25 +102,43 @@ export default function Page() {
     try {
       // Create thread if this is the first message
       if (!currentConversationId) {
+        // Create thread WITHOUT initial message to avoid race condition
         const thread = await createThread.mutateAsync({
           title: 'Betting Chat',
-          initialMessage: userMessage,
         });
         
-        // Set conversation ID and flag that we need to start streaming
+        // Set conversation ID - this will trigger SSE connection via useEffect
         setCurrentConversationId(thread.id);
-        setNeedsStreaming(true); // useEffect will start streaming once state updates
+        
+        // Store message to send after connection is ready
+        setPendingFirstMessage(userMessage);
       } else {
         // Send message to existing conversation
+        startStreaming(); // Set streaming state first
         await sendMessage.mutateAsync(userMessage);
-        
-        // Start streaming response
-        startStreaming();
       }
     } catch (error) {
       console.error('Failed to send message:', error);
     }
   };
+
+  // Send pending first message after SSE connection is established
+  useEffect(() => {
+    if (pendingFirstMessage && currentConversationId && isConnected && !isStreaming) {
+      const message = pendingFirstMessage;
+      setPendingFirstMessage(null);
+      
+      // Small delay to ensure backend is ready
+      setTimeout(async () => {
+        try {
+          startStreaming();
+          await sendMessage.mutateAsync(message);
+        } catch (error) {
+          console.error('Failed to send pending message:', error);
+        }
+      }, 300);
+    }
+  }, [pendingFirstMessage, currentConversationId, isConnected, isStreaming]);
 
   const handlePromptPress = (prompt: string) => {
     setInputText(prompt);
@@ -165,16 +188,12 @@ export default function Page() {
     console.log('Settings pressed');
   };
 
-  // Track if we just created a new conversation that needs streaming
-  const [needsStreaming, setNeedsStreaming] = useState(false);
-
-  // Start streaming after conversation is created and state has updated
+  // Establish SSE connection when conversation ID changes
   useEffect(() => {
-    if (needsStreaming && currentConversationId && !isStreaming) {
-      setNeedsStreaming(false);
-      startStreaming();
+    if (currentConversationId) {
+      connectSSE();
     }
-  }, [needsStreaming, currentConversationId, isStreaming, startStreaming]);
+  }, [currentConversationId]); // Remove connectSSE from deps to prevent infinite loop
 
   // Combine messages with streaming content
   const displayMessages = useMemo(() => {
