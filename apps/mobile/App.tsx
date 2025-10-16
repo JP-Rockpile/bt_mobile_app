@@ -14,7 +14,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { lightTheme, darkTheme } from './src/theme';
 import { queryClient } from './src/config/react-query';
 import { useUIStore } from './src/stores/ui.store';
-import { useAuthStore } from './src/stores/auth.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { databaseService } from './src/services/database.service';
 import { notificationService } from './src/services/notification.service';
 import { analyticsService } from './src/services/analytics.service';
@@ -48,17 +48,26 @@ function AppContent() {
 
   // Handle app state changes - refresh tokens when app comes to foreground
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    if (nextAppState === 'active' && isAuthenticated) {
-      logger.info('App came to foreground, checking token expiration');
-      try {
-        const isExpired = await authService.isTokenExpired();
-        if (isExpired) {
-          logger.info('Token expired while app was in background, refreshing...');
-          await refreshTokens();
-        }
-      } catch (error) {
-        logger.error('Failed to refresh token on app foreground', error);
+    if (nextAppState !== 'active') return;
+
+    // Always use the latest auth state to avoid stale closures after logout/login
+    const { isAuthenticated: currentIsAuthenticated, tokens: currentTokens } = useAuthStore.getState();
+
+    if (!currentIsAuthenticated) return;
+    if (!currentTokens?.refreshToken) {
+      // No refresh token available — likely logged out or incomplete session; skip
+      return;
+    }
+
+    logger.info('App came to foreground, checking token expiration');
+    try {
+      const isExpired = await authService.isTokenExpired();
+      if (isExpired) {
+        logger.info('Token expired while app was in background, refreshing...');
+        await refreshTokens();
       }
+    } catch (error) {
+      logger.error('Failed to refresh token on app foreground', error);
     }
   };
 
@@ -66,12 +75,16 @@ function AppContent() {
     try {
       logger.info('Initializing app', { environment: config.appEnv });
 
-      // Initialize services in parallel
+      // Initialize auth FIRST and wait for it to complete
+      logger.info('Starting auth initialization...');
+      await initializeAuth();
+      logger.info('Auth initialization completed');
+
+      // Initialize other services in parallel
       await Promise.all([
         databaseService.initialize(),
         analyticsService.initialize(),
         notificationService.initialize(),
-        initializeAuth(),
       ]);
 
       // Initialize error tracking (synchronous)
@@ -85,6 +98,7 @@ function AppContent() {
       // Track app opened
       analyticsService.trackAppOpened();
 
+      logger.info('Setting app ready...');
       setIsReady(true);
       logger.info('App initialization completed');
     } catch (error) {
@@ -153,6 +167,7 @@ function AppContent() {
   );
 }
 
+// App entry point with auth persistence
 export default function App() {
   return (
     <ErrorBoundary>

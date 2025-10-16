@@ -15,12 +15,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useCreateThread, useSendMessage, useChatMessages } from '../src/hooks/useChat';
-import { useSSEStream } from '../src/hooks/useSSEStream';
-import { databaseService } from '../src/services/database.service';
-import { useAuthStore } from '../src/stores/auth.store';
+import { router } from 'expo-router';
+import { useCreateThread, useSendMessage, useChatMessages } from '@/hooks/useChat';
+import { useSSEStream } from '@/hooks/useSSEStream';
+import { databaseService } from '@/services/database.service';
+import { useAuthStore } from '@/stores/auth.store';
 import type { ChatMessage as ChatMessageType } from '@betthink/shared';
-import LandingScreen from '../src/screens/LandingScreen';
+import LandingScreen from '@/screens/LandingScreen';
+import TermsOfServiceScreen from '@/screens/TermsOfServiceScreen';
+import PrivacyPolicyScreen from '@/screens/PrivacyPolicyScreen';
 
 const EXAMPLE_PROMPTS = [
   {
@@ -46,6 +49,8 @@ export default function Page() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [landingComplete, setLandingComplete] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const { user, isAuthenticated, login, logout } = useAuthStore();
@@ -172,20 +177,17 @@ export default function Page() {
 
   const handleTermsOfUse = () => {
     setMenuVisible(false);
-    // TODO: Navigate to Terms of Use screen or open web view
-    console.log('Terms of Use pressed');
+    setShowTerms(true);
   };
 
   const handlePrivacyPolicy = () => {
     setMenuVisible(false);
-    // TODO: Navigate to Privacy Policy screen or open web view
-    console.log('Privacy Policy pressed');
+    setShowPrivacy(true);
   };
 
   const handleSettings = () => {
     setMenuVisible(false);
-    // TODO: Navigate to Settings screen
-    console.log('Settings pressed');
+    router.push('/settings');
   };
 
   // Establish SSE connection when conversation ID changes
@@ -224,15 +226,22 @@ export default function Page() {
     }
   }, [displayMessages.length, showChat]);
 
-  // Show landing screen if not authenticated OR if landing flow not complete
-  if (!isAuthenticated || !landingComplete) {
+  // If user becomes authenticated (e.g., restored session), auto-complete landing
+  useEffect(() => {
+    if (isAuthenticated && !landingComplete) {
+      setLandingComplete(true);
+    }
+  }, [isAuthenticated, landingComplete]);
+
+  // Show landing screen only when not authenticated
+  if (!isAuthenticated) {
     return <LandingScreen onAuthenticated={() => setLandingComplete(true)} />;
   }
 
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1A1A1A" />
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -243,7 +252,7 @@ export default function Page() {
             <Pressable style={styles.menuButton} onPress={toggleMenu}>
               <Ionicons name="menu" size={24} color="#ECECEC" />
             </Pressable>
-            <Text style={styles.headerTitle}>BetGPT</Text>
+            <Text style={styles.headerTitle}>BetThink</Text>
             {!isAuthenticated ? (
               <Pressable style={styles.signupButton} onPress={handleSignIn}>
                 <Text style={styles.signupText}>Sign in</Text>
@@ -423,6 +432,12 @@ export default function Page() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Terms of Service Modal */}
+      <TermsOfServiceScreen visible={showTerms} onClose={() => setShowTerms(false)} />
+
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyScreen visible={showPrivacy} onClose={() => setShowPrivacy(false)} />
     </>
   );
 }

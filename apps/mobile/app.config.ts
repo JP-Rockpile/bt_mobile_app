@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { ExpoConfig, ConfigContext } from 'expo/config';
 
 const IS_STAGING = process.env.APP_ENV === 'staging';

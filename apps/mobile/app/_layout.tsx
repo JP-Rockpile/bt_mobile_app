@@ -9,23 +9,23 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Slot } from 'expo-router';
 import * as Updates from 'expo-updates';
-import { ErrorBoundary } from '../src/components/ErrorBoundary';
-import { BetConfirmationSheet } from '../src/components/BetConfirmationSheet';
-import { lightTheme, darkTheme } from '../src/theme';
-import { queryClient } from '../src/config/react-query';
-import { useUIStore } from '../src/stores/ui.store';
-import { useAuthStore } from '../src/stores/auth.store';
-import { databaseService } from '../src/services/database.service';
-import { notificationService } from '../src/services/notification.service';
-import { analyticsService } from '../src/services/analytics.service';
-import { errorTrackingService } from '../src/services/error-tracking.service';
-import { authService } from '../src/services/auth.service';
-import { logger } from '../src/utils/logger';
-import { config } from '../src/config';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { BetConfirmationSheet } from '@/components/BetConfirmationSheet';
+import { lightTheme, darkTheme } from '@/theme';
+import { queryClient } from '@/config/react-query';
+import { useUIStore } from '@/stores/ui.store';
+import { useAuthStore } from '@/stores/auth.store';
+import { databaseService } from '@/services/database.service';
+import { notificationService } from '@/services/notification.service';
+import { analyticsService } from '@/services/analytics.service';
+import { errorTrackingService } from '@/services/error-tracking.service';
+import { authService } from '@/services/auth.service';
+import { logger } from '@/utils/logger';
+import { config } from '@/config';
 
 function LayoutContent() {
   const { effectiveTheme, updateEffectiveTheme } = useUIStore();
-  const { initialize: initializeAuth, isAuthenticated, refreshTokens } = useAuthStore();
+  const { initialize: initializeAuth, isAuthenticated, refreshTokens, isLoading } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -48,17 +48,26 @@ function LayoutContent() {
 
   // Handle app state changes - refresh tokens when app comes to foreground
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    if (nextAppState === 'active' && isAuthenticated) {
-      logger.info('App came to foreground, checking token expiration');
-      try {
-        const isExpired = await authService.isTokenExpired();
-        if (isExpired) {
-          logger.info('Token expired while app was in background, refreshing...');
-          await refreshTokens();
-        }
-      } catch (error) {
-        logger.error('Failed to refresh token on app foreground', error);
+    if (nextAppState !== 'active') return;
+
+    // Use the freshest store values to avoid stale closures after logout
+    const { isAuthenticated: currentIsAuthenticated, tokens: currentTokens } = useAuthStore.getState();
+
+    if (!currentIsAuthenticated) return;
+    if (!currentTokens?.refreshToken) {
+      // No refresh token available — skip refresh
+      return;
+    }
+
+    logger.info('App came to foreground, checking token expiration');
+    try {
+      const isExpired = await authService.isTokenExpired();
+      if (isExpired) {
+        logger.info('Token expired while app was in background, refreshing...');
+        await refreshTokens();
       }
+    } catch (error) {
+      logger.error('Failed to refresh token on app foreground', error);
     }
   };
 
@@ -66,12 +75,15 @@ function LayoutContent() {
     try {
       logger.info('Initializing app', { environment: config.appEnv });
 
-      // Initialize services in parallel
+      // Initialize auth FIRST and wait for it to complete
+      logger.info('Starting auth initialization...');
+      await initializeAuth();
+
+      // Initialize other services in parallel
       await Promise.all([
         databaseService.initialize(),
         analyticsService.initialize(),
         notificationService.initialize(),
-        initializeAuth(),
       ]);
 
       // Initialize error tracking (synchronous)
@@ -129,7 +141,7 @@ function LayoutContent() {
     }
   };
 
-  if (!isReady) {
+  if (!isReady || isLoading) {
     return null; // Or return a splash screen component
   }
 

@@ -58,6 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           logger.info('Token expired, attempting refresh...');
           try {
             await get().refreshTokens();
+            // Ensure the user from storage is restored after a successful refresh
+            set({ user });
           } catch (refreshError) {
             logger.error('Token refresh failed during initialization', refreshError);
             // If refresh fails, still set the user state but mark as unauthenticated
@@ -78,6 +80,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             tokens,
             isAuthenticated: true,
             isLoading: false,
+          });
+          
+          // Debug: Verify state was set correctly
+          const currentState = get();
+          logger.info('Auth state after setting authenticated', {
+            isAuthenticated: currentState.isAuthenticated,
+            isLoading: currentState.isLoading,
+            hasUser: !!currentState.user,
+            hasTokens: !!currentState.tokens,
           });
         }
       } else {

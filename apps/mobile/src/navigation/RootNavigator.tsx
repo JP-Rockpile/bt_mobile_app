@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 import { useAuthStore } from '@/stores/auth.store';
@@ -11,15 +11,23 @@ import type { RootStackParamList } from './types';
 import { logger } from '@/utils/logger';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 const prefix = Linking.createURL('/');
 
 export const RootNavigator: React.FC = () => {
-  const { isAuthenticated, isLoading, initialize } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
 
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+  // Debug logging - also check raw store state
+  const storeState = useAuthStore.getState();
+  logger.info('RootNavigator render', { 
+    isAuthenticated, 
+    isLoading,
+    storeStateAuth: storeState.isAuthenticated,
+    storeStateLoading: storeState.isLoading,
+    hasUser: !!storeState.user,
+    hasTokens: !!storeState.tokens,
+  });
 
   const linking = {
     prefixes: [prefix, 'betthink://', 'https://betthink.app'],
@@ -45,12 +53,24 @@ export const RootNavigator: React.FC = () => {
     } as any);
   };
 
+  // Force navigation to Main when authenticated
+  React.useEffect(() => {
+    if (!isLoading && isAuthenticated && navigationRef.isReady()) {
+      navigationRef.reset({
+        index: 0,
+        routes: [{ name: 'Main' }],
+      });
+    }
+  }, [isAuthenticated, isLoading]);
+
   if (isLoading) {
     return null; // Or return a splash screen component
   }
 
   return (
     <NavigationContainer
+      key={`nav-${isAuthenticated ? 'authd' : 'unauthd'}`}
+      ref={navigationRef}
       linking={linking}
       onReady={onReady}
       onStateChange={(state) => {
@@ -58,6 +78,8 @@ export const RootNavigator: React.FC = () => {
       }}
     >
       <Stack.Navigator
+        key={isAuthenticated ? 'authenticated' : 'unauthenticated'}
+        initialRouteName={isAuthenticated ? 'Main' : 'Auth'}
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',

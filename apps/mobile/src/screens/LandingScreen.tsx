@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthStore } from '../stores/auth.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useLocation } from '../hooks/useLocation';
 import TermsOfServiceScreen from './TermsOfServiceScreen';
 import PrivacyPolicyScreen from './PrivacyPolicyScreen';

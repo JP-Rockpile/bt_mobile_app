@@ -120,7 +120,8 @@ class LocationService {
    */
   async openSettings(): Promise<void> {
     try {
-      await Location.requestForegroundPermissionsAsync();
+      // Open OS settings. On iOS this opens the app's settings page.
+      await Location.openSettings();
     } catch (error) {
       logger.error('Failed to open location settings', error);
     }

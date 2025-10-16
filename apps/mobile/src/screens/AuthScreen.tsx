@@ -7,11 +7,7 @@ import { spacing } from '@/theme';
 
 export const AuthScreen: React.FC = () => {
   const theme = useTheme();
-  const { login, isLoading, error, initialize } = useAuthStore();
-
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+  const { login, isLoading, error } = useAuthStore();
 
   const handleLogin = async () => {
     try {

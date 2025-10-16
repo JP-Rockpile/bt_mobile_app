@@ -289,7 +289,7 @@ export const ChatSSEComponent: React.FC<ChatSSEComponentProps> = ({
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['bottom']}
+      edges={['top', 'bottom']}
     >
       <KeyboardAvoidingView
         style={styles.container}

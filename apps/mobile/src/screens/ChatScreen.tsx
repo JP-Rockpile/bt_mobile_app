@@ -142,7 +142,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ threadId }) => {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      edges={['bottom']}
+      edges={['top', 'bottom']}
     >
       <KeyboardAvoidingView
         style={styles.container}
